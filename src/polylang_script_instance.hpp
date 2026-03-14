@@ -19,7 +19,7 @@
 #include <array>
 
 #include <godot_cpp/classes/script_extension.hpp>
-#include <godot_cpp/core/gdextension_interface.h>
+#include <gdextension_interface.h>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 
