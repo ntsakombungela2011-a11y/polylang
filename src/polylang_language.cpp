@@ -67,14 +67,14 @@ void PolyLangLanguage::_init() {
         ->globalize_path(ext_path + "adapters/");
 
     // Step 1: set adapter dir first.
-    RuntimeManager::get_singleton()->set_adapter_dir(global.utf8().get_data());
+    
 
     // Step 2: now safe to start health monitor.
     RuntimeManager::get_singleton()->start_health_monitor();
 }
 
 void PolyLangLanguage::_finish() {
-    RuntimeManager::get_singleton()->shutdown_all();
+    RuntimeManager::get_singleton()->unload_all();
 }
 
 void PolyLangLanguage::_frame() {
