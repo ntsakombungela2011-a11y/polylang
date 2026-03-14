@@ -1,0 +1,27 @@
+[package]
+name        = "polylang_adapter_rust"
+version     = "0.1.0"
+edition     = "2021"
+description = "PolyLang language adapter — Rust"
+
+[lib]
+name       = "polylang_adapter_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Bug 3 fix: ctor crate was used (#[ctor::ctor]) but not listed here.
+# This caused "use of undeclared crate ctor" compile error.
+ctor = "0.2"
+
+# No other external dependencies — zero-dependency FFI surface.
+# Add serde/serde_json here if you need complex state serialization.
+
+[profile.release]
+lto           = true      # Link-time optimisation for smaller .so
+codegen-units = 1         # Single codegen unit for max optimisation
+opt-level     = "z"       # Optimise for size (important on mobile)
+strip         = true      # Strip debug symbols from release
+
+[profile.dev]
+opt-level = 0
+debug     = true
