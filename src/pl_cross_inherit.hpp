@@ -75,7 +75,7 @@ public:
                        SandboxTier child_tier = SandboxTier::Trusted);
 
     // Unregister (called when script is unloaded).
-    void unregister(const std::stringvoid unregister(const std::string& child_path); child_path);
+    void unregister(const std::string& child_path);
     static void destroy();
 
     // ── Method resolution chain ───────────────────────────────
