@@ -1,17 +1,17 @@
 # =============================================================
-# .github/workflows/build.yml  —  PolyLang v6.7
-# Single unified CI — replaces build.yml + odin.yml
+# .github/workflows/build.yml  â€”  PolyLang v6.7
+# Single unified CI â€” replaces build.yml + odin.yml
 # =============================================================
 #
 # Job graph:
 #
-#   build-linux  ──────────────────────────────────────────┐
-#        │                                                  │
-#        ├──► test-odin-dlopen   (unit tests, dlopen mode) │
-#        │                                                  │
-#        └──► test-sandbox-escape (Odin sandbox escape)    │
-#                                                           ▼
-#   build-android ────────────────────────────────► release-package
+#   build-linux  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+#        â”‚                                                  â”‚
+#        â”œâ”€â”€â–º test-odin-dlopen   (unit tests, dlopen mode) â”‚
+#        â”‚                                                  â”‚
+#        â””â”€â”€â–º test-sandbox-escape (Odin sandbox escape)    â”‚
+#                                                           â–¼
+#   build-android â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º release-package
 #                                                   (main branch only)
 #   build-windows   (standalone, no dependencies)
 #
@@ -46,7 +46,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# ── Shared version pins (change here, applies everywhere) ─────
+# â”€â”€ Shared version pins (change here, applies everywhere) â”€â”€â”€â”€â”€
 env:
   GODOT_CPP_REF: "godot-4.6-stable"
   ANDROID_API:   "28"
@@ -54,14 +54,14 @@ env:
   NDK_VERSION:   "26.3.11579264"
 
 # ==============================================================
-# JOB 1 — Linux x86_64
+# JOB 1 â€” Linux x86_64
 # Builds: core library, all available adapters, Odin adapter
 # Tests:  sidecar config tests, Odin unit tests (static-link mode)
 # Uploads: polylang-linux-x86_64 artifact
 # ==============================================================
 jobs:
   build-linux:
-    name: "Build — Linux x86_64"
+    name: "Build â€” Linux x86_64"
     runs-on: ubuntu-22.04
 
     steps:
@@ -88,7 +88,7 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
 
-          # QuickJS (JS/TS adapters) — not always in apt, skip gracefully
+          # QuickJS (JS/TS adapters) â€” not always in apt, skip gracefully
           sudo apt-get install -y libquickjs-dev 2>/dev/null || true
 
       - name: CMake configure
@@ -152,11 +152,11 @@ jobs:
             build/libpolylang_adapter_ts.so
 
 # ==============================================================
-# JOB 2 — Android arm64-v8a API 28
+# JOB 2 â€” Android arm64-v8a API 28
 # The artifact you actually drop into your Godot project
 # ==============================================================
   build-android:
-    name: "Build — Android arm64-v8a (API ${{ env.ANDROID_API }})"
+    name: "Build â€” Android arm64-v8a (API 28)"
     runs-on: ubuntu-22.04
 
     steps:
@@ -210,8 +210,8 @@ jobs:
         run: |
           file build_android/polylang.so
           file build_android/polylang.so | grep -q "aarch64" \
-            && echo "✓ aarch64 ELF confirmed" \
-            || (echo "✗ Wrong architecture!" && exit 1)
+            && echo "âœ“ aarch64 ELF confirmed" \
+            || (echo "âœ— Wrong architecture!" && exit 1)
 
       - name: Verify Odin exports on Android binary
         run: |
@@ -234,10 +234,10 @@ jobs:
             build_android/libpolylang_odin.so
 
 # ==============================================================
-# JOB 3 — Windows x64
+# JOB 3 â€” Windows x64
 # ==============================================================
   build-windows:
-    name: "Build — Windows x64"
+    name: "Build â€” Windows x64"
     runs-on: windows-2022
 
     steps:
@@ -275,13 +275,13 @@ jobs:
             build_win/Release/polylang.lib
 
 # ==============================================================
-# JOB 4 — Odin dlopen tests
+# JOB 4 â€” Odin dlopen tests
 # Runs the adapter unit tests by dlopen()-ing the built .so
 # (complements the static-link tests already run in build-linux)
 # Needs: build-linux
 # ==============================================================
   test-odin-dlopen:
-    name: "Test — Odin adapter (dlopen mode)"
+    name: "Test â€” Odin adapter (dlopen mode)"
     runs-on: ubuntu-22.04
     needs: build-linux
 
@@ -316,12 +316,12 @@ jobs:
           echo "Exit: $?"
 
 # ==============================================================
-# JOB 5 — Odin sandbox escape tests
+# JOB 5 â€” Odin sandbox escape tests
 # Compiles a malicious Odin script and verifies it can't escape
 # Needs: build-linux
 # ==============================================================
   test-sandbox-escape:
-    name: "Test — Odin sandbox escape"
+    name: "Test â€” Odin sandbox escape"
     runs-on: ubuntu-22.04
     needs: build-linux
 
@@ -399,7 +399,7 @@ jobs:
             bash adapters/odin/odin_build_pipeline.sh \
             /tmp/odin_sandbox_test/EscapeTest.pl.odin \
             /tmp/odin_sandbox_test/EscapeTest.pl.odin.so \
-          || echo "Odin compile failed — structural test only"
+          || echo "Odin compile failed â€” structural test only"
 
       - name: Run sandbox escape test
         run: |
@@ -411,18 +411,18 @@ jobs:
       - name: Verify no escape artifact was created
         run: |
           if [ -f /tmp/sandbox_escape_test_FILE ]; then
-            echo "FAIL: sandbox escape — /tmp/sandbox_escape_test_FILE exists"
+            echo "FAIL: sandbox escape â€” /tmp/sandbox_escape_test_FILE exists"
             exit 1
           fi
           echo "PASS: no escape artifact found"
 
 # ==============================================================
-# JOB 6 — Release package (main branch push only)
+# JOB 6 â€” Release package (main branch push only)
 # Assembles the full Godot addon zip from Linux + Android builds
 # Needs: build-linux, build-android
 # ==============================================================
   release-package:
-    name: "Package — Godot addon zip"
+    name: "Package â€” Godot addon zip"
     runs-on: ubuntu-22.04
     needs: [ build-linux, build-android ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
