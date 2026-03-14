@@ -147,7 +147,7 @@ void PolyLangScript::compile_internal() {
 
 // ── _reload ───────────────────────────────────────────────────
 
-void PolyLangScript::_reload(bool /*keep_state*/) {
+godot::Error PolyLangScript::_reload(bool /*keep_state*/) {
     // Read source from disk (works inside .pck).
     godot::String gd_path = get_path();
     godot::Ref<godot::FileAccess> fa = godot::FileAccess::open(
@@ -170,6 +170,7 @@ void PolyLangScript::_reload(bool /*keep_state*/) {
 
     // HotReloadScheduler reads sandbox state from RuntimeManager itself.
     HotReloadScheduler::get_singleton()->enqueue_reload(this, path);
+    return godot::OK;
 }
 
 // ── Instance registry ─────────────────────────────────────────
@@ -242,7 +243,7 @@ godot::ScriptLanguage* PolyLangScript::_get_language() const {
     return PolyLangLanguage::get_singleton();
 }
 
-godot::Variant PolyLangScript::_get_method_info(const godot::StringName& p_method) const {
+godot::Dictionary PolyLangScript::_get_method_info(const godot::StringName& p_method) const {
     godot::Dictionary d;
     d["name"]  = p_method;
     d["flags"] = 1;
