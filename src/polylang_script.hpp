@@ -87,14 +87,14 @@ public:
     bool _has_method(const godot::StringName& p_method) const override;
     bool _has_static_method(const godot::StringName&)   const override { return false; }
 
-    godot::Variant     _get_method_info(const godot::StringName&) const override;
+    godot::Dictionary  _get_method_info(const godot::StringName&) const override;
     godot::ScriptLanguage* _get_language() const override;
 
     bool         _has_property_default_value(const godot::StringName&) const override { return false; }
     godot::Variant _get_property_default_value(const godot::StringName&) const override { return {}; }
 
     void _update_exports() override {}
-    void _reload(bool keep_state) override;  // FIX A-8: async-only now
+    godot::Error _reload(bool keep_state) override;
 
     godot::TypedArray<godot::Dictionary> _get_script_method_list()   const override;
     godot::TypedArray<godot::Dictionary> _get_script_property_list() const override;
@@ -102,7 +102,7 @@ public:
 
     godot::Dictionary _get_constants()  const override { return {}; }
     godot::TypedArray<godot::StringName> _get_members() const override { return {}; }
-    bool _is_placeholder_instance(const godot::Object*) const override { return false; }
+
 
     static void _bind_methods();
 
