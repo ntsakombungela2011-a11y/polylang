@@ -13,6 +13,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
