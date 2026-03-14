@@ -105,6 +105,8 @@ protected:
 
 private:
     PLEngineAPIBridge();
+    friend void initialize_polylang(godot::ModuleInitializationLevel);
+    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
 
     void register_all_handlers();
 

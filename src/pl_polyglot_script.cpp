@@ -19,6 +19,9 @@
 
 namespace polylang {
 
+// Forward declaration (defined at end of file)
+LanguageID language_from_string(const char* name);
+
 // ── BlockHandle ───────────────────────────────────────────────
 
 BlockHandle::~BlockHandle() {
@@ -63,13 +66,6 @@ void PolyglotScript::_bind_methods() {
     // Expose to GDScript: get block count, list languages
     godot::ClassDB::bind_method(
         godot::D_METHOD("get_block_count"), &PolyglotScript::block_count);
-    godot::ClassDB::bind_method(
-        godot::D_METHOD("get_languages"), [](PolyglotScript* self) {
-            godot::Array arr;
-            for (const auto& l : self->languages())
-                arr.push_back(godot::String(l.c_str()));
-            return arr;
-        });
 }
 
 bool PolyglotScript::_can_instantiate() const { return valid_; }
@@ -82,7 +78,7 @@ void PolyglotScript::_set_source_code(const godot::String& code) {
     export_cache_dirty_ = true;
 }
 
-godot::String PolyglotScript::_get_instance_base_type() const {
+godot::StringName PolyglotScript::_get_instance_base_type() const {
     return godot::String(header_.base_class.c_str());
 }
 
@@ -99,7 +95,7 @@ bool PolyglotScript::_inherits_script(const godot::Ref<godot::Script>&) const {
 }
 
 bool PolyglotScript::_has_method(const godot::StringName& method) const {
-    std::string mname = std::string(method.utf8().get_data());
+    std::string mname = std::string(godot::String(method).utf8().get_data());
     std::shared_lock lk(compile_mutex_);
     for (const auto& bh : blocks_) {
         if (!bh || !bh->vtable || !bh->compiled) continue;
@@ -479,7 +475,7 @@ GDExtensionBool PolyglotInstance::_set(
     auto* self = static_cast<PolyglotInstance*>(p_self);
     const godot::StringName& sn =
         *reinterpret_cast<const godot::StringName*>(p_name);
-    std::string name = sn.utf8().get_data();
+    std::string name = godot::String(sn).utf8().get_data();
 
     const godot::Variant& var =
         *reinterpret_cast<const godot::Variant*>(p_val);
@@ -509,7 +505,7 @@ GDExtensionBool PolyglotInstance::_get(
     auto* self = static_cast<PolyglotInstance*>(p_self);
     const godot::StringName& sn =
         *reinterpret_cast<const godot::StringName*>(p_name);
-    std::string name = sn.utf8().get_data();
+    std::string name = godot::String(sn).utf8().get_data();
 
     std::shared_lock lk(self->inst_mutex_);
     for (auto& bi : self->instances_) {
@@ -541,7 +537,7 @@ void PolyglotInstance::_call(
     auto* self = static_cast<PolyglotInstance*>(p_self);
     const godot::StringName& sn =
         *reinterpret_cast<const godot::StringName*>(p_method);
-    std::string name = sn.utf8().get_data();
+    std::string name = godot::String(sn).utf8().get_data();
 
     // Marshal args.
     std::vector<PLValue> args(p_argc);
@@ -598,7 +594,7 @@ GDExtensionBool PolyglotInstance::_has_method(
     auto* self = static_cast<PolyglotInstance*>(p_self);
     const godot::StringName& sn =
         *reinterpret_cast<const godot::StringName*>(p_method);
-    std::string name = sn.utf8().get_data();
+    std::string name = godot::String(sn).utf8().get_data();
 
     std::shared_lock lk(self->inst_mutex_);
     for (const auto& bi : self->instances_) {
@@ -663,8 +659,8 @@ GDExtensionScriptInstanceInfo2 PolyglotInstance::make_info() {
     info.get_owner_func    = _get_owner;
     info.notification_func = _notification;
     info.get_property_list_func  = _get_property_list;
-    info.free_property_list_func = _free_property_list;
-    info.free_func         = _free;
+    info.free_property_list_func = reinterpret_cast<decltype(info.free_property_list_func)>(_free_property_list);
+    info.free_func         = reinterpret_cast<decltype(info.free_func)>(_free);
     return info;
 }
 

@@ -160,9 +160,8 @@ int PLCrossInherit::get_on_base(const std::string& base_path,
         return inst->get_property_direct(prop, ret);
     }
 
-    bool valid = false;
-    godot::Variant val = owner->get(godot::StringName(prop), &valid);
-    if (!valid) return PL_ERR_GENERIC;
+    godot::Variant val = owner->get(godot::StringName(prop));
+    if (val.get_type() == godot::Variant::NIL) return PL_ERR_GENERIC;
     VariantBridge::to_pl_value(val, *ret);
     return PL_OK;
 }

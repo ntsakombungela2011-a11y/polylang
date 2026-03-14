@@ -36,10 +36,18 @@ HotReloadScheduler* HotReloadScheduler::singleton_ = nullptr;
 
 void HotReloadScheduler::enqueue_reload(PolyLangScript* script,
                                          const std::string& res_path) {
+    struct ReloadTask {
+        HotReloadScheduler* scheduler;
+        PolyLangScript* script;
+        std::string res_path;
+    };
+    auto* task = new ReloadTask{this, script, res_path};
     godot::WorkerThreadPool::get_singleton()->add_native_task(
-        [this, script, res_path]() {
-            compile_and_enqueue(script, res_path);
-        }, true);
+        [](void* ud) {
+            auto* t = static_cast<ReloadTask*>(ud);
+            t->scheduler->compile_and_enqueue(t->script, t->res_path);
+            delete t;
+        }, task, true);
 }
 
 // ── compile_and_enqueue (worker thread) ──────────────────────
@@ -48,7 +56,7 @@ void HotReloadScheduler::enqueue_reload(PolyLangScript* script,
 void HotReloadScheduler::compile_and_enqueue(PolyLangScript* script,
                                               std::string res_path) {
     LanguageID lang = script->get_language_id();
-    const PLAdapterVTable* vt = RuntimeManager::get_singleton()->require_vtable(lang);
+    const PLAdapterVTable* vt = RuntimeManager::get_singleton()->get_vtable(lang);
     if (!vt) return;
 
     // Read source text (works inside .pck exports).

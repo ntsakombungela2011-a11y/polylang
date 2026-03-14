@@ -56,6 +56,8 @@ protected:
 
 private:
     PLSignalBus() = default;
+    friend void initialize_polylang(godot::ModuleInitializationLevel);
+    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
     void dispatch_emission(const std::string& signal_name, const godot::Array& args);
 
     mutable std::shared_mutex                                    callable_mutex_;

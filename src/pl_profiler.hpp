@@ -72,12 +72,15 @@ public:
     void              reset();
     bool              is_enabled() const;
     void              set_enabled(bool v);
+    int64_t           get_dropped_labels() const;
 
 protected:
     static void _bind_methods();
 
 private:
     PLProfiler() = default;
+    friend void initialize_polylang(godot::ModuleInitializationLevel);
+    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
 
     void record(const std::string& label, uint64_t elapsed_usec);
 
@@ -91,11 +94,10 @@ private:
     mutable std::mutex                            stats_mutex_;
     std::unordered_map<std::string, ScopeStats>   stats_;
     std::atomic<bool>                             enabled_{true};
+    std::atomic<uint64_t>                         dropped_labels_{0};
 
     static PLProfiler* singleton_;
 };
 
 } // namespace polylang
 
-// v6.6 addition — expose dropped label counter
-// (append to class public section)

@@ -94,6 +94,8 @@ protected:
 
 private:
     PolyLangBridge() = default;
+    friend void initialize_polylang(godot::ModuleInitializationLevel);
+    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
     static PolyLangBridge* singleton_;
 };
 

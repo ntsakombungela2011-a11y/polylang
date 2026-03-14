@@ -87,11 +87,10 @@ static void c_signal_connect(const char* signal_name,
     if (!bus || !signal_name || !callback) return;
 
     NativeListenerCookie cookie;
+    std::string sname(signal_name);
     cookie.signal_name = sname;   // VLN-14: store for disconnect matching
     cookie.userdata    = userdata;
     cookie.callback    = callback;
-
-    std::string sname(signal_name);
     // connect_native bridges the godot::Array args to PLValue args.
     cookie.listener_id = bus->connect_native(sname,
         [callback, userdata](const godot::Array& arr) {
@@ -151,7 +150,11 @@ extern "C" void polylang_odin_inject_services(
     void(*)(const char*),
     void(*)(const char*),
     int(*)(const char*, const char*, PLValue*, int32_t, PLValue*)
-) __attribute__((weak));
+)
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((weak))
+#endif
+;
 
 static void inject_all_adapter_services() {
     // Build the full services struct once.

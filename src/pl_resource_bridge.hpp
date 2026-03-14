@@ -31,6 +31,7 @@
 // =============================================================
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -69,6 +70,9 @@ public:
     // Process deferred resource loads queued from worker threads.
     void flush();
 
+    // Signal shutdown to unblock all waiting worker threads.
+    void shutdown();
+
     // ── GDScript API ──────────────────────────────────────────
     godot::Variant load_resource(const godot::String& path);
     bool           is_path_allowed(const godot::String& path,
@@ -84,6 +88,8 @@ protected:
 private:
 
     PLResourceBridge();
+    friend void initialize_polylang(godot::ModuleInitializationLevel);
+    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
     bool is_main_thread() const;
     bool check_access(const std::string& path, SandboxTier tier) const;
 
@@ -105,6 +111,7 @@ private:
     std::thread::id                    main_thread_id_;
     std::queue<DeferredRequest>        deferred_queue_;
 
+    std::atomic<bool>                          shutdown_flag_{false};
     static PLResourceBridge* singleton_;
 };
 

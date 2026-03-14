@@ -93,7 +93,7 @@ public:
     godot::TypedArray<godot::Dictionary> _get_script_property_list() const override;
     godot::TypedArray<godot::Dictionary> _get_script_method_list() const override;
     bool      _has_method(const godot::StringName& method) const override;
-    godot::String _get_instance_base_type() const override;
+    godot::StringName _get_instance_base_type() const override;
     godot::Ref<godot::Script> _get_base_script() const override;
     godot::StringName _get_global_name() const override;
     bool      _inherits_script(const godot::Ref<godot::Script>& script) const override;
@@ -198,6 +198,9 @@ public:
     godot::Object* owner() const { return owner_; }
     PolyglotScript* script() const { return script_; }
 
+    // Built-in lifecycle methods that fan-out to ALL implementing blocks.
+    static const std::vector<std::string>& fanout_methods();
+
 private:
     // Dispatch a method call to ALL blocks that implement it.
     // Returns the last non-nil result.
@@ -220,8 +223,7 @@ private:
 
     void rebuild_prop_cache() const;
 
-    // Built-in lifecycle methods that fan-out to ALL implementing blocks.
-    static const std::vector<std::string>& fanout_methods();
+
 };
 
 } // namespace polylang

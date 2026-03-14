@@ -32,6 +32,7 @@
 #include "pl_engine_api_bridge.hpp"
 
 #include <godot_cpp/classes/project_settings.hpp>
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/core/class_db.hpp>

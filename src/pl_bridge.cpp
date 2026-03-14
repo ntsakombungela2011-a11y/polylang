@@ -99,14 +99,14 @@ godot::Variant PolyLangBridge::call_script(const godot::String& path,
     int32_t argc = static_cast<int32_t>(args.size());
     std::vector<PLValue> pl_args(argc);
     for (int32_t i = 0; i < argc; ++i)
-        pl_args[i] = variant_to_pl(args[i]);
+        VariantBridge::to_pl_value(args[i], pl_args[i]);
 
     PLValue ret{}; pl_value_init(&ret);
     int r = inst->call_method_direct(smethod.c_str(),
                                      pl_args.data(), argc, &ret);
 
     godot::Variant result;
-    if (r == PL_OK) result = pl_to_variant(ret);
+    if (r == PL_OK) result = VariantBridge::from_pl_value(ret);
 
     const PLAdapterVTable* vt = inst->get_vtable();
     for (auto& v : pl_args)

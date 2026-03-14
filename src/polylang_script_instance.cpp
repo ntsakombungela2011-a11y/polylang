@@ -28,7 +28,6 @@
 #include "pl_bridge.hpp"
 
 #include <godot_cpp/core/error_macros.hpp>
-#include <godot_cpp/core/gdextension_interface.h>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 
@@ -180,6 +179,22 @@ int PolyLangScriptInstance::call_method_direct(const char* name,
     return call_method(name, args, argc, ret);
 }
 
+int PolyLangScriptInstance::get_property_direct(const char* name, PLValue* out) {
+    if (!vtable_ || !vtable_->pl_get_property) { pl_value_init(out); return PL_ERR_GENERIC; }
+    std::shared_lock lk(instance_lock_);
+    void* fi = foreign_instance_.load(std::memory_order_acquire);
+    if (!fi) { pl_value_init(out); return PL_ERR_GENERIC; }
+    return vtable_->pl_get_property(fi, name, out);
+}
+
+int PolyLangScriptInstance::set_property_direct(const char* name, const PLValue* val) {
+    if (!vtable_ || !vtable_->pl_set_property) return PL_ERR_GENERIC;
+    std::shared_lock lk(instance_lock_);
+    void* fi = foreign_instance_.load(std::memory_order_acquire);
+    if (!fi) return PL_ERR_GENERIC;
+    return vtable_->pl_set_property(fi, name, val);
+}
+
 // ── Trampolines ───────────────────────────────────────────────
 
 void* PolyLangScriptInstance::_create_trampoline(void* p_userdata) {
@@ -306,10 +321,10 @@ GDExtensionScriptInstancePtr PolyLangScriptInstance::create_godot_instance(
     info.call_func            = _call_trampoline;
     info.free_func            = _free_trampoline;
     info.get_owner_func       = _get_owner_trampoline;
-    info.get_property_list_func  = [](auto, uint32_t* r) -> const GDExtensionPropertyInfo* { *r=0; return nullptr; };
-    info.free_property_list_func = [](auto, auto, uint32_t) {};
-    info.get_method_list_func    = [](auto, uint32_t* r) -> const GDExtensionMethodInfo* { *r=0; return nullptr; };
-    info.free_method_list_func   = [](auto, auto, uint32_t) {};
+    info.get_property_list_func  = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionPropertyInfo* { *r=0; return nullptr; };
+    info.free_property_list_func = [](GDExtensionScriptInstanceDataPtr, const GDExtensionPropertyInfo*, uint32_t) {};
+    info.get_method_list_func    = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionMethodInfo* { *r=0; return nullptr; };
+    info.free_method_list_func   = [](GDExtensionScriptInstanceDataPtr, const GDExtensionMethodInfo*, uint32_t) {};
     return godot::internal::gdextension_interface_script_instance_create3(&info, inst);
 }
 

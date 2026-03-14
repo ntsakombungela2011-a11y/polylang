@@ -28,6 +28,7 @@
 #include <godot_cpp/core/error_macros.hpp>
 
 #include <algorithm>
+#include <string>
 #include <cstdlib>
 #include <cstring>
 

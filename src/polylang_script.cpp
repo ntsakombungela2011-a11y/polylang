@@ -64,8 +64,6 @@ PolyLangScript::~PolyLangScript() {
         pending_handle_ = nullptr;
     }
 
-    if (language_id_ != LanguageID::COUNT)
-        RuntimeManager::get_singleton()->notify_instance_destroyed(language_id_);
 }
 
 // ── Source code ───────────────────────────────────────────────
@@ -94,7 +92,7 @@ void PolyLangScript::detect_language_from_path() {
         WARN_PRINT(("[PolyLang] Cannot detect language from path: " + path).c_str());
         return;
     }
-    vtable_ = RuntimeManager::get_singleton()->require_vtable(language_id_);
+    vtable_ = RuntimeManager::get_singleton()->get_vtable(language_id_);
 }
 
 // ── Compilation ───────────────────────────────────────────────
@@ -157,7 +155,7 @@ godot::Error PolyLangScript::_reload(bool /*keep_state*/) {
     }
 
     detect_language_from_path();
-    if (!vtable_) return;
+    if (!vtable_) return godot::ERR_UNAVAILABLE;
 
     std::string path = gd_path.utf8().get_data();
 
@@ -178,15 +176,11 @@ godot::Error PolyLangScript::_reload(bool /*keep_state*/) {
 void PolyLangScript::register_instance(PolyLangScriptInstance* inst) {
     std::unique_lock lk(instances_mutex_);
     instances_.insert(inst);
-    if (language_id_ != LanguageID::COUNT)
-        RuntimeManager::get_singleton()->notify_instance_created(language_id_);
 }
 
 void PolyLangScript::unregister_instance(PolyLangScriptInstance* inst) {
     std::unique_lock lk(instances_mutex_);
     instances_.erase(inst);
-    if (language_id_ != LanguageID::COUNT)
-        RuntimeManager::get_singleton()->notify_instance_destroyed(language_id_);
 }
 
 std::vector<PolyLangScriptInstance*> PolyLangScript::snapshot_instances() const {
@@ -212,7 +206,7 @@ bool PolyLangScript::_is_valid() const {
 bool PolyLangScript::_has_method(const godot::StringName& p_method) const {
     void* ch = compiled_handle_.load(std::memory_order_acquire);
     if (!ch || !vtable_ || !vtable_->pl_has_method) return false;
-    return vtable_->pl_has_method(ch, p_method.utf8().get_data()) != 0;
+    return vtable_->pl_has_method(ch, godot::String(p_method).utf8().get_data()) != 0;
 }
 
 void* PolyLangScript::_instance_create(godot::Object* p_object) const {

@@ -30,6 +30,7 @@
 #include <string>
 
 #include <godot_cpp/classes/script_extension.hpp>
+#include <godot_cpp/classes/script_language.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -114,6 +115,8 @@ private:
     // FIX A-8: Schedules async compilation via HotReloadScheduler.
     // Does NOT call pl_compile on the main thread.
     void schedule_async_compile();
+    godot::Error trigger_compile();
+    void compile_internal();
 
     godot::String             source_code_;
     mutable std::shared_mutex source_mutex_;

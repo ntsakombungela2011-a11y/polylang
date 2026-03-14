@@ -66,6 +66,14 @@ public:
     int call_method_direct(const char* name, PLValue* args, int32_t argc, PLValue* ret);
     const PLAdapterVTable* get_vtable() const { return vtable_; }
 
+    // Helpers used by PLCrossInherit.
+    std::string get_script_path() const {
+        return script_ ? script_->get_path().utf8().get_data() : "";
+    }
+    godot::Object* get_owner_object() const { return owner_; }
+    int get_property_direct(const char* name, PLValue* out);
+    int set_property_direct(const char* name, const PLValue* val);
+
 private:
     int call_builtin(int32_t method_id, PLValue* args, int32_t argc, PLValue* ret);
     int call_method(const char* name,   PLValue* args, int32_t argc, PLValue* ret);
