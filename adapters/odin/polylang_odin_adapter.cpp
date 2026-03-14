@@ -607,6 +607,9 @@ static void odin_get_export_vars(void* compiled,
     if (ch->api.get_export_vars) ch->api.get_export_vars(out, count);
 }
 
+// Forward declaration — defined below, used by odin_free_export_vars.
+static void pl_free_value_contents_impl(PLValue* v);
+
 static void odin_free_export_vars(PLExportVarInfo* vars, int32_t count) {
     if (!vars) return;
     for (int32_t i = 0; i < count; ++i)
