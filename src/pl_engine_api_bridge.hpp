@@ -89,13 +89,7 @@ public:
                                     PLValue*    ret_out,
                                     SandboxTier tier);
 
-                                       PLValue* a, int32_t n, PLValue* r) {
-        return pl_engine_call_impl(g, m, a, n, r, SandboxTier::Trusted);
-    }
-    static int pl_engine_call_isolated(const char* g, const char* m,
-                                        PLValue* a, int32_t n, PLValue* r) {
-        return pl_engine_call_impl(g, m, a, n, r, SandboxTier::Isolated);
-    }
+
 
     // ── Main-thread flush ─────────────────────────────────────
     // Process deferred engine calls queued from worker threads.
