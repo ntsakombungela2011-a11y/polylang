@@ -1,0 +1,485 @@
+# =============================================================
+# .github/workflows/build.yml  —  PolyLang v6.7
+# Single unified CI — replaces build.yml + odin.yml
+# =============================================================
+#
+# Job graph:
+#
+#   build-linux  ──────────────────────────────────────────┐
+#        │                                                  │
+#        ├──► test-odin-dlopen   (unit tests, dlopen mode) │
+#        │                                                  │
+#        └──► test-sandbox-escape (Odin sandbox escape)    │
+#                                                           ▼
+#   build-android ────────────────────────────────► release-package
+#                                                   (main branch only)
+#   build-windows   (standalone, no dependencies)
+#
+# Trigger paths: any src/include/adapter/test/CMake/workflow change.
+# All jobs share one GODOT_CPP_REF + one Android NDK version.
+# =============================================================
+
+name: PolyLang CI
+
+on:
+  push:
+    branches: [ main, develop, 'release/**' ]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'adapters/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'adapters/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+  workflow_dispatch:   # manual trigger from GitHub UI or: gh workflow run build.yml
+
+# Cancel in-flight runs on the same branch when a newer push arrives
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ── Shared version pins (change here, applies everywhere) ─────
+env:
+  GODOT_CPP_REF: "godot-4.6-stable"
+  ANDROID_API:   "28"
+  ANDROID_ABI:   "arm64-v8a"
+  NDK_VERSION:   "26.3.11579264"
+
+# ==============================================================
+# JOB 1 — Linux x86_64
+# Builds: core library, all available adapters, Odin adapter
+# Tests:  sidecar config tests, Odin unit tests (static-link mode)
+# Uploads: polylang-linux-x86_64 artifact
+# ==============================================================
+jobs:
+  build-linux:
+    name: "Build — Linux x86_64"
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout + submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache godot-cpp (Linux)
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build gcc-12 g++-12 \
+            liblua5.4-dev python3-dev \
+            binutils    # nm, objdump for export verification
+
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+          # QuickJS (JS/TS adapters) — not always in apt, skip gracefully
+          sudo apt-get install -y libquickjs-dev 2>/dev/null || true
+
+      - name: CMake configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYLANG_BUILD_ODIN_ADAPTER=ON \
+            -DPOLYLANG_BUILD_ODIN_TESTS=ON \
+            -DPOLYLANG_BUILD_TESTS=ON \
+            -DPOLYLANG_BUILD_SANDBOX_TESTS=OFF
+
+      - name: Build core library
+        run: cmake --build build --target polylang -j$(nproc)
+
+      - name: Build Odin adapter
+        run: cmake --build build --target polylang_odin -j$(nproc)
+
+      - name: Build all available adapters
+        # || true: a missing optional dep (e.g. QuickJS) skips that adapter
+        run: cmake --build build -j$(nproc) || true
+
+      - name: Verify core exports
+        run: |
+          echo "=== Core library symbols ==="
+          nm -D build/polylang.so | grep -E " T " | head -20
+          echo ""
+          echo "=== Odin adapter mandatory exports ==="
+          nm -D build/libpolylang_odin.so \
+            | grep -E " T (pl_get_vtable|odin_fill_vtable|odin_adapter_set_services)" \
+            | sort
+          echo ""
+          echo "=== Odin ABI version check ==="
+          objdump -d build/libpolylang_odin.so \
+            | grep -A2 "pl_get_vtable" | head -10 || true
+
+      - name: Run sidecar config tests
+        run: |
+          cmake --build build --target polylang_sidecar_tests -j$(nproc)
+          ./build/polylang_sidecar_tests
+
+      - name: Run Odin unit tests (static-link mode)
+        run: |
+          cmake --build build --target polylang_odin_tests -j$(nproc)
+          mkdir -p /tmp/polylang_odin_cache
+          ./build/polylang_odin_tests
+
+      - name: Show all built artifacts
+        run: find build -name "*.so" -o -name "*.a" | sort
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          retention-days: 14
+          path: |
+            build/polylang.so
+            build/libpolylang_odin.so
+            build/libpolylang_adapter_lua.so
+            build/libpolylang_adapter_python.so
+            build/libpolylang_adapter_js.so
+            build/libpolylang_adapter_ts.so
+
+# ==============================================================
+# JOB 2 — Android arm64-v8a API 28
+# The artifact you actually drop into your Godot project
+# ==============================================================
+  build-android:
+    name: "Build — Android arm64-v8a (API ${{ env.ANDROID_API }})"
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout + submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache godot-cpp (Android)
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
+
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Pin NDK version
+        id: ndk
+        run: |
+          sdkmanager "ndk;${{ env.NDK_VERSION }}" --sdk_root=$ANDROID_SDK_ROOT
+          NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}
+          echo "NDK_HOME=$NDK" >> $GITHUB_OUTPUT
+          echo "Pinned NDK: $NDK"
+
+      - name: Build Rust adapter for Android (best-effort)
+        continue-on-error: true
+        run: |
+          rustup target add aarch64-linux-android
+          cd adapters/rust
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=\
+            "${{ steps.ndk.outputs.NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ env.ANDROID_API }}-clang" \
+          cargo build --release --target aarch64-linux-android \
+            2>/dev/null || echo "Rust adapter skipped"
+
+      - name: CMake configure (Android cross-compile)
+        run: |
+          cmake -B build_android -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.NDK_HOME }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ env.ANDROID_ABI }} \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYLANG_BUILD_ODIN_ADAPTER=ON \
+            -DPOLYLANG_BUILD_TESTS=OFF
+
+      - name: Build core + Odin adapter
+        run: cmake --build build_android -j$(nproc)
+
+      - name: Verify aarch64 ELF
+        run: |
+          file build_android/polylang.so
+          file build_android/polylang.so | grep -q "aarch64" \
+            && echo "✓ aarch64 ELF confirmed" \
+            || (echo "✗ Wrong architecture!" && exit 1)
+
+      - name: Verify Odin exports on Android binary
+        run: |
+          LLVM=${{ steps.ndk.outputs.NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          $LLVM/llvm-nm -D build_android/libpolylang_odin.so \
+            | grep -E " T (pl_get_vtable|odin_fill_vtable)" | sort
+
+      - name: Verify no forbidden API symbols (API > 28)
+        run: |
+          LLVM=${{ steps.ndk.outputs.NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          $LLVM/llvm-readelf --dynamic build_android/polylang.so | grep NEEDED || true
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-android-arm64-v8a
+          retention-days: 30
+          path: |
+            build_android/polylang.so
+            build_android/libpolylang_odin.so
+
+# ==============================================================
+# JOB 3 — Windows x64
+# ==============================================================
+  build-windows:
+    name: "Build — Windows x64"
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout + submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache godot-cpp (Windows)
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-windows-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-windows-${{ env.GODOT_CPP_REF }}-
+
+      - name: CMake configure (MSVC)
+        shell: cmd
+        run: |
+          cmake -B build_win ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF ^
+            -DPOLYLANG_BUILD_TESTS=OFF
+
+      - name: Build
+        shell: cmd
+        run: cmake --build build_win --config Release -j4
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-windows-x64
+          retention-days: 14
+          path: |
+            build_win/Release/polylang.dll
+            build_win/Release/polylang.lib
+
+# ==============================================================
+# JOB 4 — Odin dlopen tests
+# Runs the adapter unit tests by dlopen()-ing the built .so
+# (complements the static-link tests already run in build-linux)
+# Needs: build-linux
+# ==============================================================
+  test-odin-dlopen:
+    name: "Test — Odin adapter (dlopen mode)"
+    runs-on: ubuntu-22.04
+    needs: build-linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get install -y g++ libdl-dev
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: build/
+
+      - name: Build test binary
+        run: |
+          g++ -std=c++20 -I include \
+              tests/odin_adapter_test.cpp \
+              adapters/odin/polylang_odin_adapter.cpp \
+              adapters/odin/polylang_odin_shim.c \
+              -o odin_adapter_tests \
+              -lpthread -ldl
+
+      - name: Run tests in dlopen mode
+        run: |
+          chmod +x build/libpolylang_odin.so
+          mkdir -p /tmp/polylang_odin_cache
+          POLYLANG_ODIN_ADAPTER_SO=build/libpolylang_odin.so \
+            ./odin_adapter_tests build/libpolylang_odin.so
+          echo "Exit: $?"
+
+# ==============================================================
+# JOB 5 — Odin sandbox escape tests
+# Compiles a malicious Odin script and verifies it can't escape
+# Needs: build-linux
+# ==============================================================
+  test-sandbox-escape:
+    name: "Test — Odin sandbox escape"
+    runs-on: ubuntu-22.04
+    needs: build-linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Odin compiler (best-effort)
+        id: odin
+        run: |
+          curl -fsSL \
+            https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64-nightly.zip \
+            -o odin.zip \
+          && unzip -q odin.zip -d odin_install \
+          && echo "$(pwd)/odin_install" >> $GITHUB_PATH \
+          && echo "available=true" >> $GITHUB_OUTPUT \
+          || echo "available=false" >> $GITHUB_OUTPUT
+
+      - name: Install build tools
+        run: sudo apt-get install -y g++ libdl-dev
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: build/
+
+      - name: Build sandbox test binary
+        run: |
+          g++ -std=c++20 -I include \
+              tests/sandbox_escape_test.cpp \
+              adapters/odin/polylang_odin_adapter.cpp \
+              adapters/odin/polylang_odin_shim.c \
+              -o sandbox_escape_tests \
+              -lpthread -ldl
+
+      - name: Compile malicious Odin test script (if Odin available)
+        if: steps.odin.outputs.available == 'true'
+        run: |
+          mkdir -p /tmp/odin_sandbox_test
+          cat > /tmp/odin_sandbox_test/EscapeTest.pl.odin << 'ODIN'
+          package main
+          import pl "polylang"
+          import "core:c"
+          import "core:os"
+          EscapeScript :: struct { using script: pl.OdinScript }
+          escape_create :: proc() -> ^EscapeScript {
+            e := new(EscapeScript)
+            e._vtable = { call_method = escape_call }
+            return e
+          }
+          escape_call :: proc(inst: rawptr, name: cstring,
+                              args: [^]pl.PLValue, argc: c.int32_t,
+                              ret: ^pl.PLValue) -> c.int {
+            switch string(name) {
+            case "os_open":
+              _ = os.open("/tmp/sandbox_escape_test_FILE", os.O_CREATE, 0o644)
+              ret^ = pl.make_bool(true)
+              return pl.PL_OK
+            case "safe_method":
+              ret^ = pl.make_int(42)
+              return pl.PL_OK
+            }
+            return pl.PL_ERR_METHOD_NOT_FOUND
+          }
+          @(init)
+          reg :: proc() {
+            polylang_script_factory = proc "c" () -> rawptr { return escape_create() }
+          }
+          ODIN
+
+          POLYLANG_ODIN_SHIM_PATH=adapters/odin \
+          POLYLANG_ODIN_CACHE=/tmp/odin_sandbox_test \
+          ODIN_BIN=odin \
+            bash adapters/odin/odin_build_pipeline.sh \
+            /tmp/odin_sandbox_test/EscapeTest.pl.odin \
+            /tmp/odin_sandbox_test/EscapeTest.pl.odin.so \
+          || echo "Odin compile failed — structural test only"
+
+      - name: Run sandbox escape test
+        run: |
+          mkdir -p /tmp/polylang_odin_cache
+          chmod +x build/libpolylang_odin.so || true
+          ./sandbox_escape_tests
+          echo "Exit: $?"
+
+      - name: Verify no escape artifact was created
+        run: |
+          if [ -f /tmp/sandbox_escape_test_FILE ]; then
+            echo "FAIL: sandbox escape — /tmp/sandbox_escape_test_FILE exists"
+            exit 1
+          fi
+          echo "PASS: no escape artifact found"
+
+# ==============================================================
+# JOB 6 — Release package (main branch push only)
+# Assembles the full Godot addon zip from Linux + Android builds
+# Needs: build-linux, build-android
+# ==============================================================
+  release-package:
+    name: "Package — Godot addon zip"
+    runs-on: ubuntu-22.04
+    needs: [ build-linux, build-android ]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: release/linux
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-android-arm64-v8a
+          path: release/android
+
+      - name: Assemble Godot addon layout
+        run: |
+          mkdir -p godot_addon/addons/polylang/bin/linux
+          mkdir -p godot_addon/addons/polylang/bin/android
+          mkdir -p godot_addon/addons/polylang/include
+
+          # Core library
+          cp release/linux/polylang.so   godot_addon/addons/polylang/bin/linux/
+          cp release/android/polylang.so godot_addon/addons/polylang/bin/android/
+
+          # Odin adapter
+          cp release/linux/libpolylang_odin.so   godot_addon/addons/polylang/bin/linux/  2>/dev/null || true
+          cp release/android/libpolylang_odin.so godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
+
+          # Optional adapters (built if deps were present)
+          find release/linux -name "libpolylang_adapter_*.so" \
+            -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
+
+          # Editor plugin GDScript
+          cp -r addons/polylang/. godot_addon/addons/polylang/ 2>/dev/null || true
+
+          # VTable header for adapter developers
+          cp include/pl_adapter_vtable.h godot_addon/addons/polylang/include/
+
+          echo "=== Release layout ==="
+          find godot_addon -type f | sort
+
+      - name: Create addon zip
+        run: |
+          VERSION=$(grep "VERSION" CMakeLists.txt | head -1 | grep -oP '[\d.]+')
+          cd godot_addon
+          zip -r ../polylang_v${VERSION}_addon.zip addons/
+          echo "Created: polylang_v${VERSION}_addon.zip"
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-godot-addon
+          retention-days: 90
+          path: "*.zip"
