@@ -67,7 +67,7 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git ../godot-cpp
+            https://github.com/godotengine/godot-cpp.git godot-cpp
 
       - name: Cache godot-cpp build (Linux)
         uses: actions/cache@v4
@@ -160,7 +160,7 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git ../godot-cpp
+            https://github.com/godotengine/godot-cpp.git godot-cpp
 
       - name: Cache godot-cpp build (Android)
         uses: actions/cache@v4
@@ -244,7 +244,7 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} `
-            https://github.com/godotengine/godot-cpp.git ../godot-cpp
+            https://github.com/godotengine/godot-cpp.git godot-cpp
         shell: pwsh
 
       - name: Cache godot-cpp build (Windows)
@@ -460,8 +460,8 @@ jobs:
           find release/linux -name "libpolylang_adapter_*.so" \
             -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
 
-          cp -r polylang\ plugin/addons/polylang/. godot_addon/addons/polylang/ 2>/dev/null || true
-          cp polylang\ plugin/include/pl_adapter_vtable.h godot_addon/addons/polylang/include/
+          cp -r "polylang plugin/addons/polylang/." godot_addon/addons/polylang/ 2>/dev/null || true
+          cp "polylang plugin/include/pl_adapter_vtable.h" godot_addon/addons/polylang/include/
 
           echo "=== Release layout ==="
           find godot_addon -type f | sort
