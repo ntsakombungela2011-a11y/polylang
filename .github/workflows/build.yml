@@ -128,18 +128,17 @@ jobs:
       - name: Show built artifacts
         run: find build -name "*.so" -o -name "*.a" | sort
 
+      - name: Prepare artifacts
+        run: |
+          mkdir -p ../dist_linux
+          cp build/*.so ../dist_linux/
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: polylang-linux-x86_64
           retention-days: 14
-          path: |
-            build/polylang.so
-            build/libpolylang_odin.so
-            build/libpolylang_adapter_lua.so
-            build/libpolylang_adapter_python.so
-            build/libpolylang_adapter_js.so
-            build/libpolylang_adapter_ts.so
+          path: dist_linux/
 
 # ==============================================================
 # JOB 2 — Android arm64-v8a API 28
@@ -218,14 +217,17 @@ jobs:
           $LLVM/llvm-nm -D build_android/libpolylang_odin.so \
             | grep -E " T (pl_get_vtable|odin_fill_vtable)" | sort
 
+      - name: Prepare artifacts
+        run: |
+          mkdir -p ../dist_android
+          cp build_android/*.so ../dist_android/
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: polylang-android-arm64-v8a
           retention-days: 30
-          path: |
-            build_android/polylang.so
-            build_android/libpolylang_odin.so
+          path: dist_android/
 
 # ==============================================================
 # JOB 3 — Windows x64
@@ -266,14 +268,19 @@ jobs:
         shell: cmd
         run: cmake --build build_win --config Release -j4
 
+      - name: Prepare artifacts
+        shell: pwsh
+        run: |
+          mkdir ../dist_win
+          cp build_win/Release/polylang.dll ../dist_win/
+          cp build_win/Release/polylang.lib ../dist_win/
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: polylang-windows-x64
           retention-days: 14
-          path: |
-            build_win/Release/polylang.dll
-            build_win/Release/polylang.lib
+          path: dist_win/
 
 # ==============================================================
 # JOB 4 — Odin dlopen tests
