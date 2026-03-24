@@ -62,6 +62,7 @@ private:
     mutable std::shared_mutex                                     mutex_;
     std::unordered_map<std::string, std::vector<PolyLangScriptInstance*>> map_;
 
+public:
     static PLScriptRegistry* singleton_;
 };
 
@@ -92,10 +93,8 @@ public:
 protected:
     static void _bind_methods();
 
-private:
+public:
     PolyLangBridge() = default;
-    friend void initialize_polylang(godot::ModuleInitializationLevel);
-    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
     static PolyLangBridge* singleton_;
 };
 

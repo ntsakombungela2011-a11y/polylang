@@ -103,10 +103,9 @@ public:
 protected:
     static void _bind_methods();
 
-private:
+public:
     PLEngineAPIBridge();
-    friend void initialize_polylang(godot::ModuleInitializationLevel);
-    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
+    static PLEngineAPIBridge* singleton_;
 
     void register_all_handlers();
 
@@ -155,7 +154,6 @@ private:
     std::mutex                   deferred_mutex_;
     std::queue<DeferredCall>     deferred_queue_;
 
-    static PLEngineAPIBridge*    singleton_;
 };
 
 } // namespace polylang

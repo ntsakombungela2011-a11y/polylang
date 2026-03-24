@@ -1,0 +1,24 @@
+# Root-level ignore
+"polylang plugin/build/"
+"polylang plugin/bin/"
+"polylang plugin/obj/"
+"polylang plugin/**/*.dll"
+"polylang plugin/**/*.pdb"
+"polylang plugin/**/*.lib"
+"polylang plugin/**/*.obj"
+"polylang plugin/**/*.exp"
+"polylang plugin/**/*.ilk"
+"polylang plugin/**/*.so"
+"polylang plugin/**/*.a"
+"polylang plugin/**/*.o"
+"polylang plugin/**/*.dylib"
+
+# Godot-specific
+.godot/
+*.import
+export_presets.cfg
+
+# Logs
+*.log
+build_log*.txt
+"polylang plugin/build_log*.txt"

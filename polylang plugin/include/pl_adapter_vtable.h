@@ -240,8 +240,10 @@ typedef void (*PLGetVTableFn)(PLAdapterVTable* out);
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #  define PL_EXPORT __declspec(dllexport)
+#  define PL_WEAK
 #else
 #  define PL_EXPORT __attribute__((visibility("default")))
+#  define PL_WEAK   __attribute__((weak))
 #endif
 
 #ifdef __cplusplus

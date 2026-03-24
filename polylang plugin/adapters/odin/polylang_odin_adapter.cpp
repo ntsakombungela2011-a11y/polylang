@@ -65,11 +65,15 @@
 #  define ODIN_DLOPEN(p)   (void*)LoadLibraryA(p)
 #  define ODIN_DLSYM(h,s)  (void*)GetProcAddress((HMODULE)(h),(s))
 #  define ODIN_DLCLOSE(h)  FreeLibrary((HMODULE)(h))
+#  define PL_WEAK
+#  define DL_ERROR_STR()   "LoadLibrary failed"
 #else
 #  include <dlfcn.h>
 #  define ODIN_DLOPEN(p)   dlopen((p), RTLD_NOW | RTLD_LOCAL)
 #  define ODIN_DLSYM(h,s)  dlsym((h),(s))
 #  define ODIN_DLCLOSE(h)  dlclose(h)
+#  define PL_WEAK          __attribute__((weak))
+#  define DL_ERROR_STR()   dlerror()
 #endif
 
 // ── Forward declarations of runtime service injectors ─────────
@@ -194,35 +198,35 @@ static OdinRuntimeServices g_services = {
 };
 
 // ── Weak symbol stubs (overridden by linker when core provides real ones) ─
-__attribute__((weak))
+PL_WEAK
 void polylang_signal_bus_emit(const char*, PLValue*, int32_t) {}
 
-__attribute__((weak))
+PL_WEAK
 uint64_t polylang_signal_bus_connect_native(const char*,
     void (*)(PLValue*, int32_t, void*), void*) { return 0; }
 
-__attribute__((weak))
+PL_WEAK
 void polylang_signal_bus_disconnect_native(uint64_t) {}
 
-__attribute__((weak))
+PL_WEAK
 int polylang_bridge_call(const char*, const char*, PLValue*, int32_t, PLValue* ret) {
     if (ret) pl_value_init(ret);
     return PL_ERR_NOT_IMPLEMENTED;
 }
 
-__attribute__((weak))
+PL_WEAK
 int polylang_resource_fetch(const char*, PLValue* out) {
     if (out) pl_value_init(out);
     return PL_ERR_NOT_IMPLEMENTED;
 }
 
-__attribute__((weak))
+PL_WEAK
 void polylang_resource_release(PLValue*) {}
 
-__attribute__((weak))
+PL_WEAK
 void polylang_profiler_begin(const char*) {}
 
-__attribute__((weak))
+PL_WEAK
 void polylang_profiler_end(const char*) {}
 
 // ── Path helpers ──────────────────────────────────────────────
@@ -263,7 +267,7 @@ static bool load_odin_so(OdinCompiledHandle* h) {
     h->dl_handle = ODIN_DLOPEN(h->so_path.c_str());
     if (!h->dl_handle) {
         fprintf(stderr, "[PolyLang/Odin] dlopen failed: %s — %s\n",
-                h->so_path.c_str(), dlerror());
+                h->so_path.c_str(), DL_ERROR_STR());
         return false;
     }
 

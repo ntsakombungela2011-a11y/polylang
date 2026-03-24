@@ -222,7 +222,7 @@ GDExtensionBool PolyLangScriptInstance::_set_trampoline(
     std::shared_lock lk(inst->instance_lock_);
     void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
     if (!fi) { VariantBridge::free_pl_value(pv); return false; }
-    int r = inst->vtable_->pl_set_property(fi, nm.utf8().get_data(), &pv);
+    int r = inst->vtable_->pl_set_property(fi, godot::String(nm).utf8().get_data(), &pv);
     VariantBridge::free_pl_value(pv);
     return (r == PL_OK) ? 1 : 0;
 }
@@ -239,7 +239,7 @@ GDExtensionBool PolyLangScriptInstance::_get_trampoline(
     std::shared_lock lk(inst->instance_lock_);
     void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
     if (!fi) return false;
-    int r = inst->vtable_->pl_get_property(fi, nm.utf8().get_data(), &pv);
+    int r = inst->vtable_->pl_get_property(fi, godot::String(nm).utf8().get_data(), &pv);
     if (r != PL_OK) return false;
     out = VariantBridge::from_pl_value(pv);
     VariantBridge::free_pl_value(pv);
@@ -274,11 +274,11 @@ void PolyLangScriptInstance::_call_trampoline(
     if (bid != 0 && (inst->vtable_->capabilities & PL_CAP_BUILTIN_CALL)) {
         rc = inst->call_builtin(bid, args_buf.data(), argc, &result);
         if (rc == PL_ERR_NOT_IMPLEMENTED) {
-            std::string mname = method_sn.utf8().get_data();
+            std::string mname = godot::String(method_sn).utf8().get_data();
             rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
         }
     } else {
-        std::string mname = method_sn.utf8().get_data();
+        std::string mname = godot::String(method_sn).utf8().get_data();
         rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
     }
     for (auto& pv : args_buf) VariantBridge::free_pl_value(pv);
@@ -311,6 +311,10 @@ GDExtensionObjectPtr PolyLangScriptInstance::_get_owner_trampoline(
         : nullptr;
 }
 
+std::string PolyLangScriptInstance::get_script_path() const {
+    return script_ ? script_->get_path().utf8().get_data() : "";
+}
+
 GDExtensionScriptInstancePtr PolyLangScriptInstance::create_godot_instance(
         PolyLangScript* script, godot::Object* owner, void* foreign) {
     auto* inst = new PolyLangScriptInstance(script, owner, foreign);
@@ -319,13 +323,13 @@ GDExtensionScriptInstancePtr PolyLangScriptInstance::create_godot_instance(
     info.get_func             = _get_trampoline;
     info.has_method_func      = _has_method_trampoline;
     info.call_func            = _call_trampoline;
-    info.free_func            = _free_trampoline;
+    info.free_func            = reinterpret_cast<GDExtensionScriptInstanceFree>(_free_trampoline);
     info.get_owner_func       = _get_owner_trampoline;
     info.get_property_list_func  = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionPropertyInfo* { *r=0; return nullptr; };
     info.free_property_list_func = [](GDExtensionScriptInstanceDataPtr, const GDExtensionPropertyInfo*, uint32_t) {};
     info.get_method_list_func    = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionMethodInfo* { *r=0; return nullptr; };
     info.free_method_list_func   = [](GDExtensionScriptInstanceDataPtr, const GDExtensionMethodInfo*, uint32_t) {};
-    return godot::internal::gdextension_interface_script_instance_create3(&info, inst);
+    return godot::gdextension_interface::script_instance_create3(&info, inst);
 }
 
 } // namespace polylang

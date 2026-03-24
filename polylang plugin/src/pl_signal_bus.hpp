@@ -54,10 +54,11 @@ public:
 protected:
     static void _bind_methods();
 
-private:
+public:
     PLSignalBus() = default;
-    friend void initialize_polylang(godot::ModuleInitializationLevel);
-    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
+    static PLSignalBus* singleton_;
+
+private:
     void dispatch_emission(const std::string& signal_name, const godot::Array& args);
 
     mutable std::shared_mutex                                    callable_mutex_;
@@ -72,8 +73,6 @@ private:
 
     // v6.6: Counts emissions dropped due to queue-full guard (VLN-01).
     std::atomic<uint64_t>                   dropped_emissions_{0};
-
-    static PLSignalBus* singleton_;
 };
 
 } // namespace polylang

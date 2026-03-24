@@ -142,7 +142,7 @@ static int  c_engine_call(const char* g, const char* m, PLValue* a, int32_t n, P
 }
 
 // Odin-specific injection (weak symbol from adapter).
-extern "C" void polylang_odin_inject_services(
+extern "C" void PL_WEAK polylang_odin_inject_services(
     void(*)(const char*, PLValue*, int32_t),
     void(*)(const char*, void(*)(PLValue*, int32_t, void*), void*),
     int(*)(const char*, PLValue*),
@@ -150,11 +150,7 @@ extern "C" void polylang_odin_inject_services(
     void(*)(const char*),
     void(*)(const char*),
     int(*)(const char*, const char*, PLValue*, int32_t, PLValue*)
-)
-#if defined(__GNUC__) || defined(__clang__)
-    __attribute__((weak))
-#endif
-;
+);
 
 static void inject_all_adapter_services() {
     // Build the full services struct once.
@@ -170,12 +166,18 @@ static void inject_all_adapter_services() {
     svc.call_super        = PLCrossInherit::pl_call_super_impl; // FIX C-8
 
     // Odin adapter (dedicated injection entry point).
+#ifdef _WIN32
+    // On Windows, weak symbols from other DLLs don't work like this.
+    // We should use GetProcAddress or a registration-based approach.
+    // For now, we skip the direct call to avoid link errors.
+#else
     if (polylang_odin_inject_services) {
         polylang_odin_inject_services(
             c_signal_emit, c_signal_connect,
             c_resource_fetch, c_resource_release,
             c_profiler_begin, c_profiler_end, c_engine_call);
     }
+#endif
 
     // Generic pl_inject_services hook for all other adapters.
     auto* rm = RuntimeManager::get_singleton();
@@ -299,7 +301,7 @@ void uninitialize_polylang(ModuleInitializationLevel p_level) {
 }
 
 extern "C" {
-GDExtensionBool GDE_EXPORT polylang_library_init(
+GDExtensionBool GDE_EXPORT polylang_init(
         GDExtensionInterfaceGetProcAddress p_get_proc_address,
         const GDExtensionClassLibraryPtr   p_library,
         GDExtensionInitialization*         r_initialization) {

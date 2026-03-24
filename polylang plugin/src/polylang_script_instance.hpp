@@ -67,9 +67,7 @@ public:
     const PLAdapterVTable* get_vtable() const { return vtable_; }
 
     // Helpers used by PLCrossInherit.
-    std::string get_script_path() const {
-        return script_ ? script_->get_path().utf8().get_data() : "";
-    }
+    std::string get_script_path() const;
     godot::Object* get_owner_object() const { return owner_; }
     int get_property_direct(const char* name, PLValue* out);
     int set_property_direct(const char* name, const PLValue* val);

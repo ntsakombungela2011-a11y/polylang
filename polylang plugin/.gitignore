@@ -1,0 +1,34 @@
+# Godot-specific
+.godot/
+*.import
+export_presets.cfg
+
+# Build directories
+build/
+bin/
+obj/
+
+# Compiled libraries (keep the final addon binary if needed, but usually .dll is ignored in source)
+# If the user wants to keep polylang.dll in addons/polylang/bin/, we can specifically allow it.
+# For now, let's ignore all build artifacts.
+*.dll
+*.pdb
+*.lib
+*.obj
+*.exp
+*.ilk
+*.so
+*.a
+*.o
+*.dylib
+
+# Editor / IDE
+.vs/
+*.sln
+*.vcxproj
+*.user
+.vscode/
+
+# Logs
+*.log
+build_log*.txt

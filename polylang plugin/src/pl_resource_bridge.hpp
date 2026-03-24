@@ -85,11 +85,11 @@ public:
 protected:
     static void _bind_methods();
 
-private:
-
+public:
     PLResourceBridge();
-    friend void initialize_polylang(godot::ModuleInitializationLevel);
-    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
+    static PLResourceBridge* singleton_;
+
+private:
     bool is_main_thread() const;
     bool check_access(const std::string& path, SandboxTier tier) const;
 
@@ -112,7 +112,6 @@ private:
     std::queue<DeferredRequest>        deferred_queue_;
 
     std::atomic<bool>                          shutdown_flag_{false};
-    static PLResourceBridge* singleton_;
 };
 
 // ── Convenience wrappers for adapter injection ─────────────────

@@ -157,6 +157,21 @@ private:
 struct BlockInstance {
     BlockHandle*        block{nullptr};   // non-owning borrow
     std::atomic<void*>  foreign{nullptr}; // owned
+
+    BlockInstance() = default;
+    BlockInstance(const BlockInstance&) = delete;
+    BlockInstance& operator=(const BlockInstance&) = delete;
+
+    BlockInstance(BlockInstance&& o) noexcept : block(o.block) {
+        foreign.store(o.foreign.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_release);
+    }
+    BlockInstance& operator=(BlockInstance&& o) noexcept {
+        if (this != &o) {
+            block = o.block;
+            foreign.store(o.foreign.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_release);
+        }
+        return *this;
+    }
 };
 
 // ── The polyglot script instance ─────────────────────────────

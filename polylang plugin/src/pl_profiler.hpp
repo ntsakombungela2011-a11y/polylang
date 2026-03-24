@@ -77,10 +77,9 @@ public:
 protected:
     static void _bind_methods();
 
-private:
+public:
     PLProfiler() = default;
-    friend void initialize_polylang(godot::ModuleInitializationLevel);
-    friend void uninitialize_polylang(godot::ModuleInitializationLevel);
+    static PLProfiler* singleton_;
 
     void record(const std::string& label, uint64_t elapsed_usec);
 
@@ -96,7 +95,6 @@ private:
     std::atomic<bool>                             enabled_{true};
     std::atomic<uint64_t>                         dropped_labels_{0};
 
-    static PLProfiler* singleton_;
 };
 
 } // namespace polylang
