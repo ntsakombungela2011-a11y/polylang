@@ -23,20 +23,20 @@ on:
   push:
     branches: [ main, develop, 'release/**' ]
     paths:
-      - 'src/**'
-      - 'include/**'
-      - 'adapters/**'
-      - 'tests/**'
-      - 'CMakeLists.txt'
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/tests/**'
+      - 'polylang plugin/CMakeLists.txt'
       - '.github/workflows/build.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'src/**'
-      - 'include/**'
-      - 'adapters/**'
-      - 'tests/**'
-      - 'CMakeLists.txt'
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/tests/**'
+      - 'polylang plugin/CMakeLists.txt'
   workflow_dispatch:
 
 concurrency:
@@ -55,6 +55,9 @@ jobs:
   build-linux:
     name: "Build — Linux x86_64"
     runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: polylang plugin
 
     steps:
       - name: Checkout
@@ -64,13 +67,13 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+            https://github.com/godotengine/godot-cpp.git ../godot-cpp
 
       - name: Cache godot-cpp build (Linux)
         uses: actions/cache@v4
         with:
           path: godot-cpp/bin
-          key: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          key: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
           restore-keys: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-
 
       - name: Install dependencies
@@ -146,6 +149,9 @@ jobs:
   build-android:
     name: "Build — Android arm64-v8a (API 28)"
     runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: polylang plugin
 
     steps:
       - name: Checkout
@@ -154,13 +160,13 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+            https://github.com/godotengine/godot-cpp.git ../godot-cpp
 
       - name: Cache godot-cpp build (Android)
         uses: actions/cache@v4
         with:
           path: godot-cpp/bin
-          key: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          key: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
           restore-keys: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
 
       # ubuntu-22.04 runners ship NDK at $ANDROID_NDK_ROOT — no action required
@@ -227,6 +233,9 @@ jobs:
   build-windows:
     name: "Build — Windows x64"
     runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: polylang plugin
 
     steps:
       - name: Checkout
@@ -235,14 +244,14 @@ jobs:
       - name: Clone godot-cpp
         run: |
           git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} `
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+            https://github.com/godotengine/godot-cpp.git ../godot-cpp
         shell: pwsh
 
       - name: Cache godot-cpp build (Windows)
         uses: actions/cache@v4
         with:
           path: godot-cpp/bin
-          key: godot-cpp-windows-${{ env.GODOT_CPP_REF }}-${{ hashFiles('godot-cpp/CMakeLists.txt') }}
+          key: godot-cpp-windows-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
           restore-keys: godot-cpp-windows-${{ env.GODOT_CPP_REF }}-
 
       - name: CMake configure (MSVC)
@@ -274,6 +283,9 @@ jobs:
     name: "Test — Odin adapter (dlopen)"
     runs-on: ubuntu-22.04
     needs: build-linux
+    defaults:
+      run:
+        working-directory: polylang plugin
 
     steps:
       - name: Checkout
@@ -313,6 +325,9 @@ jobs:
     name: "Test — Odin sandbox escape"
     runs-on: ubuntu-22.04
     needs: build-linux
+    defaults:
+      run:
+        working-directory: polylang plugin
 
     steps:
       - name: Checkout
@@ -445,15 +460,15 @@ jobs:
           find release/linux -name "libpolylang_adapter_*.so" \
             -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
 
-          cp -r addons/polylang/. godot_addon/addons/polylang/ 2>/dev/null || true
-          cp include/pl_adapter_vtable.h godot_addon/addons/polylang/include/
+          cp -r polylang\ plugin/addons/polylang/. godot_addon/addons/polylang/ 2>/dev/null || true
+          cp polylang\ plugin/include/pl_adapter_vtable.h godot_addon/addons/polylang/include/
 
           echo "=== Release layout ==="
           find godot_addon -type f | sort
 
       - name: Create addon zip
         run: |
-          VERSION=$(grep "VERSION" CMakeLists.txt | head -1 | grep -oP '[\d.]+')
+          VERSION=$(grep "VERSION" "polylang plugin/CMakeLists.txt" | head -1 | grep -oP '[\d.]+')
           cd godot_addon
           zip -r ../polylang_v${VERSION}_addon.zip addons/
 
