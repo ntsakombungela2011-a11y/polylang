@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/cmake_install.cmake",
+		"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/godot-cpp/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

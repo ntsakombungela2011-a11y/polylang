@@ -1,0 +1,18 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageMessage.cmake
+C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython/Support.cmake
+C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython3.cmake
+C:/Program Files/CMake/share/cmake-4.3/Modules/ProcessorCount.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/cmake.verify_globs
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/CMakeLists.txt
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/GodotCPPModule.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/android.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/common_compiler_flags.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/emsdkHack.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/godotcpp.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/ios.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/linux.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/macos.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/web.cmake
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/cmake/windows.cmake

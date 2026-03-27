@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\register_types.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\polylang_language.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\polylang_script.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\polylang_script_instance.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\runtime_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\compile_cache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\hot_reload_scheduler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\variant_bridge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_polyglot_parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_polyglot_script.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_signal_bus.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_bridge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_cross_inherit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_resource_bridge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_engine_api_bridge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_async_runtime.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_coroutine_scheduler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_export_parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_profiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\pl_state_transfer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\src\mod_loader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Risuna Ndlovu\Downloads\polylang\polylang plugin\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{B246AC9D-5F90-3C69-8FFB-F0B4919D54F7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

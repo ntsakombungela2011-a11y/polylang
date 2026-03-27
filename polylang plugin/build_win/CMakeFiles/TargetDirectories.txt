@@ -1,0 +1,9 @@
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/polylang.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/polylang_adapter_python.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/INSTALL.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/ALL_BUILD.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/ZERO_CHECK.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/godot-cpp/CMakeFiles/generate_bindings.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/godot-cpp/CMakeFiles/godot-cpp.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/godot-cpp/CMakeFiles/INSTALL.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/godot-cpp/CMakeFiles/ALL_BUILD.dir

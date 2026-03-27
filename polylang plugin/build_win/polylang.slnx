@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+	<Configurations>
+		<BuildType Name="Debug"/>
+		<BuildType Name="Release"/>
+		<BuildType Name="MinSizeRel"/>
+		<BuildType Name="RelWithDebInfo"/>
+		<Platform Name="x64"/>
+	</Configurations>
+	<Project Path="polylang.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="d0876714-a356-3fda-a992-7da8e7d06839">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="godot-cpp/godot-cpp.vcxproj"/>
+	</Project>
+	<Project Path="polylang_adapter_python.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="630a8c96-e658-3414-a086-ec7ab0bcbab3">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Folder Name="/CMakePredefinedTargets/">
+		<Project Path="ALL_BUILD.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="46bed187-7d34-3775-ab86-a2e084cc7423" DefaultStartup="true">
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+			<BuildDependency Project="godot-cpp/godot-cpp.vcxproj"/>
+			<BuildDependency Project="polylang.vcxproj"/>
+			<BuildDependency Project="polylang_adapter_python.vcxproj"/>
+		</Project>
+		<Project Path="INSTALL.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="1f2f5097-32f4-3069-925d-079382afbde3">
+			<BuildDependency Project="ALL_BUILD.vcxproj"/>
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+			<Build Solution="Debug|*" Project="false"/>
+			<Build Solution="Release|*" Project="false"/>
+			<Build Solution="MinSizeRel|*" Project="false"/>
+			<Build Solution="RelWithDebInfo|*" Project="false"/>
+		</Project>
+		<Project Path="ZERO_CHECK.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="27e719b8-7c0c-30d8-8820-f9bf586995f6"/>
+	</Folder>
+	<Folder Name="/godot-cpp/">
+		<Project Path="godot-cpp/generate_bindings.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="94eed7c6-82dd-38e7-a0b4-dafc3ba776c9">
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		</Project>
+		<Project Path="godot-cpp/godot-cpp.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="1325e914-0261-38a0-980e-facb66e3ab37">
+			<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+			<BuildDependency Project="godot-cpp/generate_bindings.vcxproj"/>
+		</Project>
+	</Folder>
+</Solution>
