@@ -1,0 +1,10 @@
+^C:\USERS\RISUNA NDLOVU\DOWNLOADS\POLYLANG\POLYLANG PLUGIN\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin" "-BC:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win" --check-stamp-file "C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/build_win/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
