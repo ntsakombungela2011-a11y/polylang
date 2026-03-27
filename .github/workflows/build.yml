@@ -72,7 +72,7 @@ jobs:
       - name: Cache godot-cpp build (Linux)
         uses: actions/cache@v4
         with:
-          path: godot-cpp/bin
+          path: polylang plugin/godot-cpp/bin
           key: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
           restore-keys: godot-cpp-linux-${{ env.GODOT_CPP_REF }}-
 
@@ -164,7 +164,7 @@ jobs:
       - name: Cache godot-cpp build (Android)
         uses: actions/cache@v4
         with:
-          path: godot-cpp/bin
+          path: polylang plugin/godot-cpp/bin
           key: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
           restore-keys: godot-cpp-android-${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
 
@@ -305,7 +305,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: polylang-linux-x86_64
-          path: build/
+          path: polylang plugin/build/
 
       - name: Build test binary
         run: |
@@ -358,7 +358,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: polylang-linux-x86_64
-          path: build/
+          path: polylang plugin/build/
 
       - name: Build sandbox test binary
         run: |
