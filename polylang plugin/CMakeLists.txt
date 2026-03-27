@@ -45,10 +45,10 @@ endif()
 # executes dynamic GDExtension callback pointers!
 set(PL_HARDEN_FLAGS "")
 if(MSVC)
-    # DZ-04: MSVC Deep Hardening (ASLR, Buffer Security)
-    # Note: /sdl is omitted as it forces unused argument warnings in godot-cpp into fatal errors.
-    list(APPEND PL_HARDEN_FLAGS /GS)
-    add_link_options(/DYNAMICBASE /NXCOMPAT)
+    # DZ-04: MSVC Deep Hardening removed.
+    # Manual MSVC overrides (/GS, /DYNAMICBASE, /NXCOMPAT, /sdl) cause fatal incompatibilities
+    # with the Godot Engine runtime plugin loader. We rely entirely on the engine's default
+    # Visual Studio compilation profile for Windows stability.
 else()
     list(APPEND PL_HARDEN_FLAGS
         -Wall -Wextra -Wno-unused-parameter
