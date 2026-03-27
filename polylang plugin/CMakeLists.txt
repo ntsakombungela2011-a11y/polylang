@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# EZ-03: Strip RPATH information leaks
+set(CMAKE_SKIP_RPATH ON)
+
 # ── Android API guard ─────────────────────────────────────────
 # std::shared_mutex + std::atomic require Android API 28+ (Bionic).
 if(ANDROID)

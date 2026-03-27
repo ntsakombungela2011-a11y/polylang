@@ -66,9 +66,8 @@ fi
 # We copy shim files into a temp package dir alongside the user script
 # so odin sees them all in the same package.
 HASH="$(echo -n "$SRC_ABS" | sha256sum | cut -c1-16)"
-BUILD_DIR="$CACHE/build_${HASH}"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+# EZ-02: Use cryptographically secure temp directories to prevent Symlink RCEs
+BUILD_DIR="$(mktemp -d "${CACHE}/build_${HASH}_XXXXXX")"
 
 # Copy shim files into the build package
 cp "$SHIM_PATH/polylang_odin_shim.odin"       "$BUILD_DIR/"

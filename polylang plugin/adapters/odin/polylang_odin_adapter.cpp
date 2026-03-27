@@ -230,6 +230,17 @@ PL_WEAK
 void polylang_profiler_end(const char*) {}
 
 // ── Path helpers ──────────────────────────────────────────────
+// EZ-01: Bash strict escaping prevents OS command injection
+static std::string escape_sh_arg(const std::string& in) {
+    std::string out = "'";
+    for (char c : in) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
+}
+
 // Derive the pre-built .so path from the script res:// path.
 // Convention: script.pl.odin → script.pl.odin.so
 static std::string derive_so_path(const std::string& res_path) {
@@ -252,7 +263,7 @@ static std::string invoke_odin_build_pipeline(const std::string& src_path,
                                      : "odin_build_pipeline.sh";
 
     // Build command: <script> <src> <out.so>
-    std::string cmd = std::string(script) + " \"" + src_path + "\" \"" + out_so + "\"";
+    std::string cmd = escape_sh_arg(script) + " " + escape_sh_arg(src_path) + " " + escape_sh_arg(out_so);
     int rc = system(cmd.c_str());
     if (rc != 0) {
         fprintf(stderr, "[PolyLang/Odin] Build pipeline failed (rc=%d) for %s\n",

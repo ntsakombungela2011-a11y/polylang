@@ -80,10 +80,9 @@ else
 fi
 
 # ── Build directory ───────────────────────────────────────────
+# EZ-02: Cryptographically unique build directory to prevent symlink collision
 HASH="$(echo -n "${SRC_ABS}_android" | sha256sum | cut -c1-16)"
-BUILD_DIR="$CACHE/android_${HASH}"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+BUILD_DIR="$(mktemp -d "${CACHE}/android_${HASH}_XXXXXX")"
 
 cp "$SHIM_PATH/polylang_odin_shim.odin"       "$BUILD_DIR/"
 cp "$SHIM_PATH/polylang_odin_script_api.odin" "$BUILD_DIR/"
