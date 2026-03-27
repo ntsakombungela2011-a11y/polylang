@@ -601,7 +601,7 @@ jobs:
   release-package:
     name: "Package — Godot addon zip"
     runs-on: ubuntu-22.04
-    needs: [ build-linux, build-android ]
+    needs: [ build-linux, build-android, build-windows ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -620,6 +620,12 @@ jobs:
           name: polylang-android-arm64-v8a
           path: release/android
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-windows-x64
+          path: release/windows
+
       - name: Verify downloaded artifacts
         run: |
           set -euo pipefail
@@ -627,16 +633,20 @@ jobs:
             || { echo "FATAL: Linux polylang.so missing"; exit 1; }
           test -f release/android/polylang.so \
             || { echo "FATAL: Android polylang.so missing"; exit 1; }
+          test -f release/windows/polylang.dll \
+            || { echo "FATAL: Windows polylang.dll missing"; exit 1; }
 
       - name: Assemble Godot addon layout
         run: |
           set -euo pipefail
           mkdir -p godot_addon/addons/polylang/bin/linux
           mkdir -p godot_addon/addons/polylang/bin/android
+          mkdir -p godot_addon/addons/polylang/bin/windows
           mkdir -p godot_addon/addons/polylang/include
 
           cp release/linux/polylang.so   godot_addon/addons/polylang/bin/linux/
           cp release/android/polylang.so godot_addon/addons/polylang/bin/android/
+          cp release/windows/polylang.dll godot_addon/addons/polylang/bin/windows/
 
           cp release/linux/libpolylang_odin.so    godot_addon/addons/polylang/bin/linux/  2>/dev/null || true
           cp release/android/libpolylang_odin.so  godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
