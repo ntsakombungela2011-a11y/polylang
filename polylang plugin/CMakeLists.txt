@@ -36,12 +36,14 @@ else()
 endif()
 
 # ── Compiler hardening flags ─────────────────────────────────
+# ZT-17: _FORTIFY_SOURCE requires optimisation (-O1+) to be effective.
+#        Use a generator expression so it only applies in Release builds.
 set(PL_HARDEN_FLAGS "")
 if(NOT MSVC)
     list(APPEND PL_HARDEN_FLAGS
         -Wall -Wextra -Wno-unused-parameter
         -fstack-protector-strong
-        -D_FORTIFY_SOURCE=2
+        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
     )
     if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
         list(APPEND PL_HARDEN_FLAGS -fPIE)
@@ -49,7 +51,8 @@ if(NOT MSVC)
 endif()
 
 # ── Core GDExtension library ──────────────────────────────────
-add_library(polylang SHARED
+# ZT-18: Respect PL_LIB_TYPE (STATIC on iOS, SHARED elsewhere)
+add_library(polylang ${PL_LIB_TYPE}
     # Core runtime
     src/register_types.cpp
     src/polylang_language.cpp
@@ -82,10 +85,13 @@ add_library(polylang SHARED
 target_include_directories(polylang PRIVATE include src)
 target_link_libraries(polylang PRIVATE godot::cpp)
 target_compile_options(polylang PRIVATE ${PL_HARDEN_FLAGS})
+# ZT-20: SOVERSION for ABI versioning on Linux
 set_target_properties(polylang PROPERTIES
     PREFIX ""
     CXX_VISIBILITY_PRESET    hidden
     VISIBILITY_INLINES_HIDDEN ON
+    SOVERSION 6
+    POSITION_INDEPENDENT_CODE ON
 )
 
 target_compile_definitions(polylang PRIVATE
