@@ -39,12 +39,15 @@ else()
 endif()
 
 # ── Compiler hardening flags ─────────────────────────────────
-# DZ-03, DZ-04, DZ-06, DZ-07: Deep Hardening Configuration
+# DZ-03, DZ-04, DZ-07: Deep Hardening Configuration
+# NOTE: Control Flow Guard (/guard:cf, -fcf-protection) and CETCOMPAT 
+# were removed because they cause instant crashes when Godot Engine 
+# executes dynamic GDExtension callback pointers!
 set(PL_HARDEN_FLAGS "")
 if(MSVC)
-    # DZ-04: MSVC Deep Hardening (CFG, SDL, ASLR)
-    add_compile_options(/GS /guard:cf /sdl)
-    add_link_options(/guard:cf /DYNAMICBASE /NXCOMPAT /CETCOMPAT)
+    # DZ-04: MSVC Deep Hardening (SDL, ASLR, Buffer Security)
+    add_compile_options(/GS /sdl)
+    add_link_options(/DYNAMICBASE /NXCOMPAT)
 else()
     list(APPEND PL_HARDEN_FLAGS
         -Wall -Wextra -Wno-unused-parameter
@@ -52,9 +55,6 @@ else()
         $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
         $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
     )
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|AMD64)")
-        list(APPEND PL_HARDEN_FLAGS -fcf-protection=full) # DZ-06
-    endif()
     if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
         list(APPEND PL_HARDEN_FLAGS -fPIE)
     endif()
