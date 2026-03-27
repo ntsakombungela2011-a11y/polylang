@@ -45,8 +45,9 @@ endif()
 # executes dynamic GDExtension callback pointers!
 set(PL_HARDEN_FLAGS "")
 if(MSVC)
-    # DZ-04: MSVC Deep Hardening (SDL, ASLR, Buffer Security)
-    add_compile_options(/GS /sdl)
+    # DZ-04: MSVC Deep Hardening (ASLR, Buffer Security)
+    # Note: /sdl is omitted as it forces unused argument warnings in godot-cpp into fatal errors.
+    list(APPEND PL_HARDEN_FLAGS /GS)
     add_link_options(/DYNAMICBASE /NXCOMPAT)
 else()
     list(APPEND PL_HARDEN_FLAGS
