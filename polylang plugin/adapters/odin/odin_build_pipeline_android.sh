@@ -52,6 +52,12 @@ mkdir -p "$CACHE"
 SRC_ABS="$(realpath "$SRC")"
 SRC_BASE="$(basename "$SRC_ABS")"
 
+# DZ-10: Prevent filename shadowing of security-critical shims
+if [[ "$SRC_BASE" == "polylang_odin_shim.odin" || "$SRC_BASE" == "polylang_odin_script_api.odin" ]]; then
+    echo "[PolyLang/Odin/Android] FATAL: Source file cannot be named '$SRC_BASE' to prevent shim shadowing." >&2
+    exit 1
+fi
+
 # ── NDK toolchain paths ───────────────────────────────────────
 # NDK provides a standalone linker for arm64-v8a Linux.
 NDK_TOOLCHAIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
@@ -99,6 +105,7 @@ echo "[PolyLang/Odin/Android] Cross-compiling $SRC_BASE → $OUT (API=$API_LEVEL
     -extra-linker-flags:"-fuse-ld=$NDK_TOOLCHAIN/bin/ld.lld \
         --sysroot=$NDK_SYSROOT        \
         -target aarch64-linux-android${API_LEVEL} \
+        -Wl,-z,relro,-z,now \
         -lc -lm -ldl"
 
 RC=$?

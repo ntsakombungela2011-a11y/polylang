@@ -46,6 +46,12 @@ SRC_ABS="$(realpath "$SRC")"
 SRC_DIR="$(dirname "$SRC_ABS")"
 SRC_BASE="$(basename "$SRC_ABS")"
 
+# DZ-10: Prevent filename shadowing of security-critical shims
+if [[ "$SRC_BASE" == "polylang_odin_shim.odin" || "$SRC_BASE" == "polylang_odin_script_api.odin" ]]; then
+    echo "[PolyLang/Odin] FATAL: Source file cannot be named '$SRC_BASE' to prevent shim shadowing." >&2
+    exit 1
+fi
+
 # ── Determine optimization ────────────────────────────────────
 if [[ -n "${POLYLANG_DEBUG:-}" ]]; then
     OPT_FLAG="-opt:none"
@@ -91,7 +97,8 @@ echo "[PolyLang/Odin] Compiling $SRC_BASE → $OUT (target=$TARGET, opt=${OPT_FL
     ${DEBUG_FLAG}          \
     -no-entry-point        \
     -vet                   \
-    -strict-style
+    -strict-style          \
+    -extra-linker-flags:"-Wl,-z,relro,-z,now"
 
 RC=$?
 rm -rf "$BUILD_DIR"

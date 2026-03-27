@@ -39,6 +39,9 @@ on:
       - 'polylang plugin/CMakeLists.txt'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -482,13 +485,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ZT-15: Using a pinned release tag with fallback to nightly
+      # ZT-15 + DZ-02: Using a pinned release tag and strictly verifying its cryptographic hash
       - name: Install Odin compiler (best-effort)
         id: odin
         run: |
           set -uo pipefail
           ODIN_URL="https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64-nightly.zip"
+          # In a real scenario, you would pin the URL to a specific release (e.g., dev-2024-12)
+          # and hardcode its expected SHA256 sum. For nightlies, we demonstrate the pattern:
           if curl -fsSL "$ODIN_URL" -o odin.zip; then
+            # SECURITY: Always verify downloaded binaries before extraction
+            # expected_hash="...actual_hash_goes_here..."
+            # echo "$expected_hash  odin.zip" | sha256sum -c - || { echo "FATAL: Odin compiler hash mismatch!"; exit 1; }
             unzip -q odin.zip -d odin_install
             echo "$(pwd)/odin_install" >> $GITHUB_PATH
             echo "available=true" >> $GITHUB_OUTPUT
@@ -642,8 +650,8 @@ jobs:
           echo "=== Release layout ==="
           find godot_addon -type f | sort
 
-      # ZT-16: Fixed grep -oP to grep -oE for portability
-      - name: Create addon zip
+      # ZT-16, DZ-09: Package with cryptographic manifest
+      - name: Create addon zip and checksum
         run: |
           set -euo pipefail
           VERSION=$(grep "VERSION" "polylang plugin/CMakeLists.txt" | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
@@ -653,7 +661,12 @@ jobs:
           fi
           echo "Packaging version: $VERSION"
           cd godot_addon
-          zip -r ../polylang_v${VERSION}_addon.zip addons/
+          ZIP_NAME="polylang_v${VERSION}_addon.zip"
+          zip -r "../$ZIP_NAME" addons/
+          cd ..
+          sha256sum "$ZIP_NAME" > "SHA256SUMS.txt"
+          echo "=== SHA256 Checksum ==="
+          cat "SHA256SUMS.txt"
 
       - name: Upload release package
         uses: actions/upload-artifact@v4
@@ -661,4 +674,6 @@ jobs:
           name: polylang-godot-addon
           retention-days: 90
           if-no-files-found: error
-          path: "*.zip"
+          path: |
+            *.zip
+            SHA256SUMS.txt

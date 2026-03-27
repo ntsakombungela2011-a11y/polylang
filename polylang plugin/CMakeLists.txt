@@ -36,17 +36,28 @@ else()
 endif()
 
 # ── Compiler hardening flags ─────────────────────────────────
-# ZT-17: _FORTIFY_SOURCE requires optimisation (-O1+) to be effective.
-#        Use a generator expression so it only applies in Release builds.
+# DZ-03, DZ-04, DZ-06, DZ-07: Deep Hardening Configuration
 set(PL_HARDEN_FLAGS "")
-if(NOT MSVC)
+if(MSVC)
+    # DZ-04: MSVC Deep Hardening (CFG, SDL, ASLR)
+    add_compile_options(/GS /guard:cf /sdl)
+    add_link_options(/guard:cf /DYNAMICBASE /NXCOMPAT /CETCOMPAT)
+else()
     list(APPEND PL_HARDEN_FLAGS
         -Wall -Wextra -Wno-unused-parameter
         -fstack-protector-strong
         $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
+        $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
     )
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|AMD64)")
+        list(APPEND PL_HARDEN_FLAGS -fcf-protection=full) # DZ-06
+    endif()
     if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
         list(APPEND PL_HARDEN_FLAGS -fPIE)
+    endif()
+    # DZ-03: Full RELRO & BIND_NOW for all ELF targets
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS")
+        add_link_options(-Wl,-z,relro,-z,now)
     endif()
 endif()
 
@@ -366,6 +377,7 @@ if(POLYLANG_BUILD_ODIN_TESTS)
         adapters/odin/polylang_odin_adapter.cpp
         adapters/odin/polylang_odin_shim.c)
     target_include_directories(polylang_odin_tests PRIVATE include)
+    target_compile_options(polylang_odin_tests PRIVATE ${PL_HARDEN_FLAGS})
     if(UNIX AND NOT APPLE)
         target_link_libraries(polylang_odin_tests PRIVATE dl pthread)
     endif()
@@ -380,6 +392,7 @@ if(POLYLANG_BUILD_TESTS)
     enable_testing()
     add_executable(polylang_sidecar_tests tests/sidecar_config_test.cpp)
     target_include_directories(polylang_sidecar_tests PRIVATE include)
+    target_compile_options(polylang_sidecar_tests PRIVATE ${PL_HARDEN_FLAGS})
     add_test(NAME SidecarTests COMMAND polylang_sidecar_tests)
     message(STATUS "Sidecar tests: ENABLED")
 endif()
@@ -387,6 +400,7 @@ endif()
 if(POLYLANG_BUILD_SANDBOX_TESTS)
     add_executable(polylang_sandbox_escape_test tests/sandbox_escape_test.cpp)
     target_include_directories(polylang_sandbox_escape_test PRIVATE include)
+    target_compile_options(polylang_sandbox_escape_test PRIVATE ${PL_HARDEN_FLAGS})
     if(UNIX AND NOT APPLE)
         target_link_libraries(polylang_sandbox_escape_test PRIVATE dl)
     endif()
