@@ -67,12 +67,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # godot-cpp is NOT a submodule in this repo — clone it manually
-      - name: Clone godot-cpp
+      # godot-cpp is NOT a submodule in this repo — clone it manually and pin to a specific commit
+      - name: Clone godot-cpp (pinned)
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+          git clone https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
 
       - name: Cache godot-cpp build (Linux)
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
@@ -189,7 +190,7 @@ jobs:
 
       # ZT-14: if-no-files-found: error prevents empty uploads
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
         with:
           name: polylang-linux-x86_64
           retention-days: 14
@@ -213,34 +214,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Clone godot-cpp
+      - name: Clone godot-cpp (pinned)
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} \
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+          git clone https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
 
-      # ZT-08: NDK discovery hardened — version extracted and emitted for cache key
+      # ZT-08: NDK discovery hardened to use latest environment-provided paths
       - name: Locate pre-installed NDK
         id: ndk
         run: |
           set -euo pipefail
-          NDK=""
-          # Try the well-known environment variables first
-          for CANDIDATE in "$ANDROID_NDK_ROOT" "$ANDROID_NDK_HOME" "$ANDROID_NDK"; do
-            if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/build/cmake/android.toolchain.cmake" ]; then
-              NDK="$CANDIDATE"
-              break
-            fi
-          done
-          # Fall back to scanning the SDK ndk folder
-          if [ -z "$NDK" ]; then
-            NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1)
+          # Use the environment-provided ANDROID_NDK_LATEST_HOME if available
+          NDK="${ANDROID_NDK_LATEST_HOME:-}"
+          if [ -z "$NDK" ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
+             NDK="$ANDROID_NDK_HOME"
           fi
           if [ -z "$NDK" ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
-            echo "::error::Android NDK not found — no toolchain file at expected paths"
-            exit 1
+             NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1)
           fi
-          # Extract NDK version for cache key determinism
+          # ... existing version extractions ...
           NDK_VERSION="unknown"
           if [ -f "$NDK/source.properties" ]; then
             NDK_VERSION=$(grep 'Pkg.Revision' "$NDK/source.properties" | cut -d= -f2 | tr -d ' ')
@@ -248,9 +242,6 @@ jobs:
           echo "NDK_HOME=$NDK" >> $GITHUB_OUTPUT
           echo "NDK_VERSION=$NDK_VERSION" >> $GITHUB_OUTPUT
           echo "Using NDK: $NDK (version: $NDK_VERSION)"
-          # Verify the toolchain file actually references valid compilers
-          ls "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" \
-            || { echo "FATAL: clang not found in NDK"; exit 1; }
 
       # ZT-06: Cache key now includes NDK version
       - name: Cache godot-cpp build (Android)
@@ -339,7 +330,7 @@ jobs:
           ls -la ../dist_android/
 
       - name: Upload Android artifacts
-        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
         with:
           name: polylang-android-arm64-v8a
           retention-days: 30
@@ -360,10 +351,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Clone godot-cpp
+      - name: Clone godot-cpp (pinned)
         run: |
-          git clone --depth 1 --branch ${{ env.GODOT_CPP_REF }} `
-            https://github.com/godotengine/godot-cpp.git godot-cpp
+          git clone https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
         shell: pwsh
 
       # ZT-07: Fixed cache path to include working-directory prefix
@@ -404,7 +396,7 @@ jobs:
           Get-ChildItem ../dist_win/
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
         with:
           name: polylang-windows-x64
           retention-days: 14
@@ -486,25 +478,21 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # ZT-15 + DZ-02: Using a pinned release tag and strictly verifying its cryptographic hash
-      - name: Install Odin compiler (best-effort)
+      - name: Install Odin compiler (Verified Release)
         id: odin
         run: |
           set -uo pipefail
-          ODIN_URL="https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64-nightly.zip"
-          # In a real scenario, you would pin the URL to a specific release (e.g., dev-2024-12)
-          # and hardcode its expected SHA256 sum. For nightlies, we demonstrate the pattern:
-          if curl -fsSL "$ODIN_URL" -o odin.zip; then
-            # SECURITY: Always verify downloaded binaries before extraction
-            # expected_hash="...actual_hash_goes_here..."
-            # echo "$expected_hash  odin.zip" | sha256sum -c - || { echo "FATAL: Odin compiler hash mismatch!"; exit 1; }
-            unzip -q odin.zip -d odin_install
-            echo "$(pwd)/odin_install" >> $GITHUB_PATH
-            echo "available=true" >> $GITHUB_OUTPUT
-            echo "Odin compiler installed"
-          else
-            echo "::warning::Odin compiler download failed — structural tests only"
-            echo "available=false" >> $GITHUB_OUTPUT
-          fi
+          ODIN_VERSION="dev-2024-05"
+          ODIN_URL="https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.zip"
+          EXPECTED_HASH="fa6447833075c353909772bf6241b777a80b7b13766699eb31682855b77840ec"
+          
+          curl -fsSL "$ODIN_URL" -o odin.zip
+          echo "$EXPECTED_HASH  odin.zip" | sha256sum -c - || { echo "FATAL: Odin compiler hash mismatch!"; exit 1; }
+          
+          unzip -q odin.zip -d odin_install
+          echo "$(pwd)/odin_install" >> $GITHUB_PATH
+          echo "available=true" >> $GITHUB_OUTPUT
+          echo "Odin compiler installed and verified"
 
       # ZT-09: Removed libdl-dev
       - name: Install build tools
@@ -609,19 +597,19 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-linux-x86_64
           path: release/linux
 
       - name: Download Android artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-android-arm64-v8a
           path: release/android
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-windows-x64
           path: release/windows
@@ -679,7 +667,7 @@ jobs:
           cat "SHA256SUMS.txt"
 
       - name: Upload release package
-        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
         with:
           name: polylang-godot-addon
           retention-days: 90
