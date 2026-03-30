@@ -377,15 +377,15 @@ jobs:
           restore-keys: godot-cpp-windows-msvc2022-${{ env.GODOT_CPP_REF }}-
 
       - name: CMake configure (MSVC)
-        shell: cmd
+        shell: pwsh
         run: |
-          cmake -B build_win ^
-            -DCMAKE_BUILD_TYPE=Release ^
-            -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF ^
+          cmake -B build_win `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF
 
       - name: Build
-        shell: cmd
+        shell: pwsh
         run: cmake --build build_win --config Release -j4
 
       - name: Verify outputs
