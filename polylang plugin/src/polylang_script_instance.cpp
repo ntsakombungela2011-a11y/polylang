@@ -222,7 +222,8 @@ GDExtensionBool PolyLangScriptInstance::_set_trampoline(
     std::shared_lock lk(inst->instance_lock_);
     void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
     if (!fi) { VariantBridge::free_pl_value(pv); return false; }
-    int r = inst->vtable_->pl_set_property(fi, godot::String(nm).utf8().get_data(), &pv);
+    godot::String s_name = nm;
+    int r = inst->vtable_->pl_set_property(fi, s_name.utf8().get_data(), &pv);
     VariantBridge::free_pl_value(pv);
     return (r == PL_OK) ? 1 : 0;
 }
@@ -239,7 +240,8 @@ GDExtensionBool PolyLangScriptInstance::_get_trampoline(
     std::shared_lock lk(inst->instance_lock_);
     void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
     if (!fi) return false;
-    int r = inst->vtable_->pl_get_property(fi, godot::String(nm).utf8().get_data(), &pv);
+    godot::String s_name = nm;
+    int r = inst->vtable_->pl_get_property(fi, s_name.utf8().get_data(), &pv);
     if (r != PL_OK) return false;
     out = VariantBridge::from_pl_value(pv);
     VariantBridge::free_pl_value(pv);
@@ -274,12 +276,18 @@ void PolyLangScriptInstance::_call_trampoline(
     if (bid != 0 && (inst->vtable_->capabilities & PL_CAP_BUILTIN_CALL)) {
         rc = inst->call_builtin(bid, args_buf.data(), argc, &result);
         if (rc == PL_ERR_NOT_IMPLEMENTED) {
-            std::string mname = godot::String(method_sn).utf8().get_data();
+        {
+            godot::String s_mname = method_sn;
+            std::string mname = s_mname.utf8().get_data();
             rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
         }
+        }
     } else {
-        std::string mname = godot::String(method_sn).utf8().get_data();
+    {
+        godot::String s_mname = method_sn;
+        std::string mname = s_mname.utf8().get_data();
         rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
+    }
     }
     for (auto& pv : args_buf) VariantBridge::free_pl_value(pv);
     if (rc == PL_OK || rc >= 0) {

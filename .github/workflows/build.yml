@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # godot-cpp is NOT a submodule in this repo — clone it manually
       - name: Clone godot-cpp
@@ -75,7 +75,7 @@ jobs:
             https://github.com/godotengine/godot-cpp.git godot-cpp
 
       - name: Cache godot-cpp build (Linux)
-        uses: actions/cache@v4
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
           key: godot-cpp-linux-gcc12-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
@@ -211,7 +211,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Clone godot-cpp
         run: |
@@ -254,7 +254,7 @@ jobs:
 
       # ZT-06: Cache key now includes NDK version
       - name: Cache godot-cpp build (Android)
-        uses: actions/cache@v4
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
           key: godot-cpp-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
@@ -339,7 +339,7 @@ jobs:
           ls -la ../dist_android/
 
       - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
         with:
           name: polylang-android-arm64-v8a
           retention-days: 30
@@ -358,7 +358,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Clone godot-cpp
         run: |
@@ -368,7 +368,7 @@ jobs:
 
       # ZT-07: Fixed cache path to include working-directory prefix
       - name: Cache godot-cpp build (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
           key: godot-cpp-windows-msvc2022-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
@@ -404,7 +404,7 @@ jobs:
           Get-ChildItem ../dist_win/
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
         with:
           name: polylang-windows-x64
           retention-days: 14
@@ -426,7 +426,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # ZT-09: Removed libdl-dev (dlopen lives in libc6-dev, already present)
       - name: Install build tools
@@ -436,7 +436,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends g++
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
         with:
           name: polylang-linux-x86_64
           path: polylang plugin/build/
@@ -483,7 +483,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # ZT-15 + DZ-02: Using a pinned release tag and strictly verifying its cryptographic hash
       - name: Install Odin compiler (best-effort)
@@ -514,7 +514,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends g++
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
         with:
           name: polylang-linux-x86_64
           path: polylang plugin/build/
@@ -606,22 +606,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
         with:
           name: polylang-linux-x86_64
           path: release/linux
 
       - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
         with:
           name: polylang-android-arm64-v8a
           path: release/android
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
         with:
           name: polylang-windows-x64
           path: release/windows
@@ -679,7 +679,7 @@ jobs:
           cat "SHA256SUMS.txt"
 
       - name: Upload release package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cedc5d8ad05778b460c0462003c2763f9055404 # v4.6.0
         with:
           name: polylang-godot-addon
           retention-days: 90
