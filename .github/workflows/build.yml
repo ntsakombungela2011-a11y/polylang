@@ -68,6 +68,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       # godot-cpp is NOT a submodule in this repo — clone it manually and pin to a specific commit
       - name: Clone godot-cpp (pinned)
@@ -81,8 +84,8 @@ jobs:
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-linux-gcc12-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
-          restore-keys: godot-cpp-linux-gcc12-${{ env.GODOT_CPP_REF }}-
+          key: godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-
 
       - name: Install dependencies
         run: |
@@ -219,6 +222,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       - name: Clone godot-cpp (pinned)
         run: |
@@ -254,8 +260,8 @@ jobs:
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
-          restore-keys: godot-cpp-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
+          key: godot-cpp-${{ runner.os }}-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-${{ runner.os }}-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
 
       - name: Install build tools
         run: |
@@ -360,6 +366,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       - name: Clone godot-cpp (pinned)
         run: |
@@ -373,8 +382,20 @@ jobs:
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-windows-msvc2022-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
-          restore-keys: godot-cpp-windows-msvc2022-${{ env.GODOT_CPP_REF }}-
+          key: godot-cpp-${{ runner.os }}-msvc2022-${{ env.GODOT_CPP_REF }}-${{ hashFiles('polylang plugin/godot-cpp/CMakeLists.txt') }}
+          restore-keys: godot-cpp-${{ runner.os }}-msvc2022-${{ env.GODOT_CPP_REF }}-
+
+      # ZT-10: Remove any stale CMake cache/build dir before configure to prevent path errors
+      - name: Clean previous CMake cache (Windows)
+        shell: pwsh
+        run: |
+          if (Test-Path build_win) {
+            Write-Host "Removing stale build_win directory"
+            Remove-Item -Recurse -Force build_win
+          }
+          if (Test-Path CMakeCache.txt) {
+            Remove-Item -Force CMakeCache.txt
+          }
 
       - name: CMake configure (MSVC)
         shell: pwsh
@@ -433,6 +454,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       # ZT-09: Removed libdl-dev (dlopen lives in libc6-dev, already present)
       - name: Install build tools
@@ -492,6 +516,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       # ZT-15 + DZ-02: Using a pinned release tag and strictly verifying its cryptographic hash
       - name: Install Odin compiler (Verified Release)
@@ -613,6 +640,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          fetch-depth: 0
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8

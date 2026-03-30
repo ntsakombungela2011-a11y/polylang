@@ -370,6 +370,7 @@ if(POLYLANG_BUILD_ODIN_ADAPTER)
     install(PROGRAMS
         adapters/odin/odin_build_pipeline.sh
         adapters/odin/odin_build_pipeline_android.sh
+        adapters/odin/odin_build_pipeline.ps1
         DESTINATION addons/polylang/odin)
     message(STATUS "Odin adapter: ENABLED")
 endif()

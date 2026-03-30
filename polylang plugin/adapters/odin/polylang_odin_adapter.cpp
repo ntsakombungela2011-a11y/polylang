@@ -257,13 +257,21 @@ static std::string invoke_odin_build_pipeline(const std::string& src_path,
     size_t h = std::hash<std::string>{}(src_path);
     char hash_buf[24];
     snprintf(hash_buf, sizeof(hash_buf), "%016zx", h);
-    std::string out_so = cache_dir + "/odin_" + hash_buf + ".so";
+    std::string out_so = cache_dir + "/odin_" + hash_buf + (is_android ? ".so" : ".dll");
+    if (!is_android && !strstr(out_so.c_str(), ".dll")) out_so += ".so"; // generic .so for linux/mac
 
-    const char* script = is_android ? "odin_build_pipeline_android.sh"
-                                     : "odin_build_pipeline.sh";
-
+    std::string script;
+#if defined(_WIN32)
+    script = "odin_build_pipeline.ps1";
+    // PowerShell command with triple-quoted strings for safety
+    std::string cmd = "powershell -ExecutionPolicy Bypass -File \"" + script + "\" \"" + src_path + "\" \"" + out_so + "\"";
+#else
+    script = is_android ? "odin_build_pipeline_android.sh"
+                         : "odin_build_pipeline.sh";
     // Build command: <script> <src> <out.so>
     std::string cmd = escape_sh_arg(script) + " " + escape_sh_arg(src_path) + " " + escape_sh_arg(out_so);
+#endif
+
     int rc = system(cmd.c_str());
     if (rc != 0) {
         fprintf(stderr, "[PolyLang/Odin] Build pipeline failed (rc=%d) for %s\n",
