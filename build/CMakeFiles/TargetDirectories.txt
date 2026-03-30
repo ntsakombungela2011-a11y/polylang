@@ -1,0 +1,15 @@
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/polylang.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/polylang_adapter_python.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/polylang_odin.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/edit_cache.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/rebuild_cache.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/list_install_components.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/install.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/install/local.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/generate_bindings.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/godot-cpp.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/edit_cache.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/rebuild_cache.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/list_install_components.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/install.dir
+C:/Users/Risuna Ndlovu/Downloads/polylang/build/godot-cpp/CMakeFiles/install/local.dir

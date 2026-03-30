@@ -333,12 +333,12 @@ PolyglotInstance::PolyglotInstance(PolyglotScript* script, godot::Object* owner)
     // Create one foreign instance per compiled block.
     std::shared_lock lk(script->compile_mutex());
     for (const auto& bh : script->blocks()) {
-        BlockInstance bi;
-        bi.block = bh.get();
+        auto bi = std::make_unique<BlockInstance>();
+        bi->block = bh.get();
         if (bh && bh->vtable && bh->compiled && bh->vtable->pl_instantiate_class) {
             void* fi = bh->vtable->pl_instantiate_class(
                 bh->compiled, bh->language.c_str());
-            bi.foreign.store(fi, std::memory_order_release);
+            bi->foreign.store(fi, std::memory_order_release);
         }
         instances_.push_back(std::move(bi));
     }
@@ -347,9 +347,10 @@ PolyglotInstance::PolyglotInstance(PolyglotScript* script, godot::Object* owner)
 PolyglotInstance::~PolyglotInstance() {
     std::unique_lock lk(inst_mutex_);
     for (auto& bi : instances_) {
-        void* fi = bi.foreign.exchange(nullptr, std::memory_order_acq_rel);
-        if (fi && bi.block && bi.block->vtable && bi.block->vtable->pl_free_instance)
-            bi.block->vtable->pl_free_instance(fi);
+        if (!bi) continue;
+        void* fi = bi->foreign.exchange(nullptr, std::memory_order_acq_rel);
+        if (fi && bi->block && bi->block->vtable && bi->block->vtable->pl_free_instance)
+            bi->block->vtable->pl_free_instance(fi);
     }
 }
 
@@ -359,19 +360,19 @@ int PolyglotInstance::call_all_blocks(const char* method,
     int last_rc = PL_ERR_METHOD_NOT_FOUND;
     std::shared_lock lk(inst_mutex_);
     for (auto& bi : instances_) {
-        if (!bi.block || !bi.block->vtable) continue;
-        void* fi = bi.foreign.load(std::memory_order_acquire);
+        if (!bi || !bi->block || !bi->block->vtable) continue;
+        void* fi = bi->foreign.load(std::memory_order_acquire);
         if (!fi) continue;
-        if (!bi.block->vtable->pl_call_method) continue;
+        if (!bi->block->vtable->pl_call_method) continue;
         PLValue block_ret;
         pl_value_init(&block_ret);
-        int rc = bi.block->vtable->pl_call_method(fi, method, args, argc, &block_ret);
+        int rc = bi->block->vtable->pl_call_method(fi, method, args, argc, &block_ret);
         if (rc == PL_OK) {
             // FIX C-10: Always free ret's heap before overwriting.
             // Fall back to VariantBridge::free_pl_value when pl_free_value_contents
             // is null — otherwise string/array heap inside ret leaks.
-            if (bi.block->vtable->pl_free_value_contents) {
-                bi.block->vtable->pl_free_value_contents(ret);
+            if (bi->block->vtable->pl_free_value_contents) {
+                bi->block->vtable->pl_free_value_contents(ret);
             } else {
                 VariantBridge::free_pl_value(*ret);
             }
@@ -389,14 +390,14 @@ int PolyglotInstance::call_first_block(const char* method,
     pl_value_init(ret);
     std::shared_lock lk(inst_mutex_);
     for (auto& bi : instances_) {
-        if (!bi.block || !bi.block->vtable) continue;
-        void* fi = bi.foreign.load(std::memory_order_acquire);
+        if (!bi || !bi->block || !bi->block->vtable) continue;
+        void* fi = bi->foreign.load(std::memory_order_acquire);
         if (!fi) continue;
-        if (!bi.block->vtable->pl_has_method ||
-            !bi.block->vtable->pl_has_method(bi.block->compiled, method))
+        if (!bi->block->vtable->pl_has_method ||
+            !bi->block->vtable->pl_has_method(bi->block->compiled, method))
             continue;
-        if (!bi.block->vtable->pl_call_method) continue;
-        return bi.block->vtable->pl_call_method(fi, method, args, argc, ret);
+        if (!bi->block->vtable->pl_call_method) continue;
+        return bi->block->vtable->pl_call_method(fi, method, args, argc, ret);
     }
     return PL_ERR_METHOD_NOT_FOUND;
 }
@@ -408,7 +409,7 @@ void PolyglotInstance::hot_swap(
     // Save state per block before swapping.
     std::vector<StateSnapshot> snapshots(instances_.size());
     for (size_t i = 0; i < instances_.size(); ++i) {
-        auto& bi = instances_[i];
+        auto& bi = *instances_[i];
         void* fi = bi.foreign.load(std::memory_order_acquire);
         if (!fi || !bi.block) continue;
         snapshots[i] = StateTransfer::save(fi, bi.block->vtable, nullptr);
@@ -416,25 +417,26 @@ void PolyglotInstance::hot_swap(
 
     // Free old foreign instances.
     for (auto& bi : instances_) {
-        void* fi = bi.foreign.exchange(nullptr, std::memory_order_acq_rel);
-        if (fi && bi.block && bi.block->vtable && bi.block->vtable->pl_free_instance)
-            bi.block->vtable->pl_free_instance(fi);
+        if (!bi) continue;
+        void* fi = bi->foreign.exchange(nullptr, std::memory_order_acq_rel);
+        if (fi && bi->block && bi->block->vtable && bi->block->vtable->pl_free_instance)
+            bi->block->vtable->pl_free_instance(fi);
     }
 
     // Install new blocks + create new instances.
     instances_.clear();
     instances_.reserve(new_blocks.size());
     for (size_t i = 0; i < new_blocks.size(); ++i) {
-        BlockInstance bi;
-        bi.block = new_blocks[i].get();
-        if (bi.block && bi.block->vtable && bi.block->compiled &&
-            bi.block->vtable->pl_instantiate_class) {
-            void* fi = bi.block->vtable->pl_instantiate_class(
-                bi.block->compiled, bi.block->language.c_str());
-            bi.foreign.store(fi, std::memory_order_release);
+        auto bi = std::make_unique<BlockInstance>();
+        bi->block = new_blocks[i].get();
+        if (bi->block && bi->block->vtable && bi->block->compiled &&
+            bi->block->vtable->pl_instantiate_class) {
+            void* fi = bi->block->vtable->pl_instantiate_class(
+                bi->block->compiled, bi->block->language.c_str());
+            bi->foreign.store(fi, std::memory_order_release);
             // Restore state.
             if (fi && i < snapshots.size() && !snapshots[i].empty())
-                StateTransfer::restore(snapshots[i], fi, bi.block->vtable, nullptr);
+                StateTransfer::restore(snapshots[i], fi, bi->block->vtable, nullptr);
         }
         instances_.push_back(std::move(bi));
     }
@@ -484,11 +486,11 @@ GDExtensionBool PolyglotInstance::_set(
 
     std::shared_lock lk(self->inst_mutex_);
     for (auto& bi : self->instances_) {
-        if (!bi.block || !bi.block->vtable || !bi.block->vtable->pl_set_property)
+        if (!bi || !bi->block || !bi->block->vtable || !bi->block->vtable->pl_set_property)
             continue;
-        void* fi = bi.foreign.load(std::memory_order_acquire);
+        void* fi = bi->foreign.load(std::memory_order_acquire);
         if (!fi) continue;
-        int rc = bi.block->vtable->pl_set_property(fi, name.c_str(), &plv);
+        int rc = bi->block->vtable->pl_set_property(fi, name.c_str(), &plv);
         if (rc == PL_OK) {
             VariantBridge::free_pl_value(plv);
             return true;
@@ -509,17 +511,17 @@ GDExtensionBool PolyglotInstance::_get(
 
     std::shared_lock lk(self->inst_mutex_);
     for (auto& bi : self->instances_) {
-        if (!bi.block || !bi.block->vtable || !bi.block->vtable->pl_get_property)
+        if (!bi || !bi->block || !bi->block->vtable || !bi->block->vtable->pl_get_property)
             continue;
-        void* fi = bi.foreign.load(std::memory_order_acquire);
+        void* fi = bi->foreign.load(std::memory_order_acquire);
         if (!fi) continue;
         PLValue out;
         pl_value_init(&out);
-        int rc = bi.block->vtable->pl_get_property(fi, name.c_str(), &out);
+        int rc = bi->block->vtable->pl_get_property(fi, name.c_str(), &out);
         if (rc == PL_OK) {
             godot::Variant result = VariantBridge::from_pl_value(out);
-            if (bi.block->vtable->pl_free_value_contents)
-                bi.block->vtable->pl_free_value_contents(&out);
+            if (bi->block->vtable->pl_free_value_contents)
+                bi->block->vtable->pl_free_value_contents(&out);
             *reinterpret_cast<godot::Variant*>(p_ret) = result;
             return true;
         }
@@ -572,8 +574,8 @@ void PolyglotInstance::_call(
         // For simplicity use the first non-null vtable.
         std::shared_lock lk(self->inst_mutex_);
         for (auto& bi : self->instances_) {
-            if (bi.block && bi.block->vtable && bi.block->vtable->pl_free_value_contents) {
-                bi.block->vtable->pl_free_value_contents(&ret);
+            if (bi && bi->block && bi->block->vtable && bi->block->vtable->pl_free_value_contents) {
+                bi->block->vtable->pl_free_value_contents(&ret);
                 break;
             }
         }
@@ -598,9 +600,9 @@ GDExtensionBool PolyglotInstance::_has_method(
 
     std::shared_lock lk(self->inst_mutex_);
     for (const auto& bi : self->instances_) {
-        if (!bi.block || !bi.block->vtable || !bi.block->compiled) continue;
-        if (bi.block->vtable->pl_has_method &&
-            bi.block->vtable->pl_has_method(bi.block->compiled, name.c_str()))
+        if (!bi || !bi->block || !bi->block->vtable || !bi->block->compiled) continue;
+        if (bi->block->vtable->pl_has_method &&
+            bi->block->vtable->pl_has_method(bi->block->compiled, name.c_str()))
             return true;
     }
     return false;

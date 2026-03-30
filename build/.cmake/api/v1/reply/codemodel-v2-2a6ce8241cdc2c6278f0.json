@@ -1,0 +1,181 @@
+{
+	"configurations" : 
+	[
+		{
+			"abstractTargets" : 
+			[
+				{
+					"directoryIndex" : 1,
+					"id" : "Python3::Interpreter::@4487305cb972aeb5fb22",
+					"jsonFile" : "target-Python3__Interpreter-Debug-add49e42485f49822e80.json",
+					"name" : "Python3::Interpreter",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "Python3::InterpreterMultiConfig::@4487305cb972aeb5fb22",
+					"jsonFile" : "target-Python3__InterpreterMultiConfig-Debug-3da24d9f7a9b9a13eaf5.json",
+					"name" : "Python3::InterpreterMultiConfig",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Python3::Module::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Python3__Module-Debug-4a70eeca89359a888dea.json",
+					"name" : "Python3::Module",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Python3::Python::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Python3__Python-Debug-4b905b4f0fb32c208257.json",
+					"name" : "Python3::Python",
+					"projectIndex" : 0
+				}
+			],
+			"directories" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						2,
+						3
+					],
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-bed2d0418ad407928dae.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.22"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						2,
+						3,
+						4
+					]
+				},
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1
+					],
+					"build" : "godot-cpp",
+					"jsonFile" : "directory-godot-cpp-Debug-ec4bdccae00eae9d7f8b.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "godot-cpp",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						2,
+						3
+					],
+					"childIndexes" : 
+					[
+						1
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "polylang",
+					"targetIndexes" : 
+					[
+						2,
+						3,
+						4
+					]
+				},
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1
+					],
+					"directoryIndexes" : 
+					[
+						1
+					],
+					"name" : "godot-cpp",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 1,
+					"id" : "generate_bindings::@4487305cb972aeb5fb22",
+					"jsonFile" : "target-generate_bindings-Debug-0bcf669148e6009f6220.json",
+					"name" : "generate_bindings",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "godot-cpp::@4487305cb972aeb5fb22",
+					"jsonFile" : "target-godot-cpp-Debug-2943a41036060f4f5c18.json",
+					"name" : "godot-cpp",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "polylang::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-polylang-Debug-941641ade903cace0311.json",
+					"name" : "polylang",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "polylang_adapter_python::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-polylang_adapter_python-Debug-d769d69fd82f1b247359.json",
+					"name" : "polylang_adapter_python",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "polylang_odin::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-polylang_odin-Debug-bc6a30b070db30f1096e.json",
+					"name" : "polylang_odin",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build",
+		"source" : "C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 10
+	}
+}

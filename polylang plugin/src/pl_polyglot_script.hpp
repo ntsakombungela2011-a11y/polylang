@@ -161,17 +161,8 @@ struct BlockInstance {
     BlockInstance() = default;
     BlockInstance(const BlockInstance&) = delete;
     BlockInstance& operator=(const BlockInstance&) = delete;
-
-    BlockInstance(BlockInstance&& o) noexcept : block(o.block) {
-        foreign.store(o.foreign.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_release);
-    }
-    BlockInstance& operator=(BlockInstance&& o) noexcept {
-        if (this != &o) {
-            block = o.block;
-            foreign.store(o.foreign.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_release);
-        }
-        return *this;
-    }
+    BlockInstance(BlockInstance&&) = delete;
+    BlockInstance& operator=(BlockInstance&&) = delete;
 };
 
 // ── The polyglot script instance ─────────────────────────────
@@ -226,10 +217,10 @@ private:
     int call_first_block(const char* method,
                          PLValue* args, int32_t argc, PLValue* ret);
 
-    PolyglotScript*              script_;
-    godot::Object*               owner_;
-    std::vector<BlockInstance>   instances_;
-    mutable std::shared_mutex    inst_mutex_;
+    PolyglotScript*                             script_;
+    godot::Object*                              owner_;
+    std::vector<std::unique_ptr<BlockInstance>> instances_;
+    mutable std::shared_mutex                   inst_mutex_;
 
     // Cached GDExtension property list (built from aggregated @export vars).
     mutable std::vector<GDExtensionPropertyInfo> prop_info_cache_;

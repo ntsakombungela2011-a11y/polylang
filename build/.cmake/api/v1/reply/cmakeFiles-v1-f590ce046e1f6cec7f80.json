@@ -1,0 +1,350 @@
+{
+	"globsDependent" : 
+	[
+		{
+			"expression" : "C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/*.cpp",
+			"paths" : 
+			[
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/classes/editor_plugin_registration.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/classes/low_level.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/classes/wrapped.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/class_db.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/error_macros.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/memory.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/method_bind.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/object.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/core/print_string.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/godot.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/aabb.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/basis.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/callable_custom.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/callable_method_pointer.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/char_string.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/color.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/packed_arrays.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/plane.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/projection.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/quaternion.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/rect2.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/rect2i.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/transform2d.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/transform3d.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/variant.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/variant_internal.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector2.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector2i.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector3.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector3i.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector4.cpp",
+				"C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin/godot-cpp/src/variant/vector4i.cpp"
+			],
+			"recurse" : true
+		}
+	],
+	"inputs" : 
+	[
+		{
+			"path" : "CMakeLists.txt"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/4.3.0/CMakeSystem.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInitialize.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows-Initialize.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/4.3.0/CMakeCXXCompiler.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/4.3.0/CMakeCCompiler.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeGenericSystem.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeInitializeConfigs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/WindowsPaths.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeLanguageInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/CMakeCommonCompilerMacros.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows-MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows-MSVC.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build/CMakeFiles/4.3.0/CMakeRCCompiler.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeRCInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCommonLanguageInclude.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCXXLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCommonLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Linker/MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Linker/MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeLanguageInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/MSVC-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Compiler/CMakeCommonCompilerMacros.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows-MSVC-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Windows-MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCommonLanguageInclude.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCommonLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Linker/MSVC-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Linker/MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-MSVC-C.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindLua.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython3.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython/Support.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"path" : "godot-cpp/CMakeLists.txt"
+		},
+		{
+			"path" : "godot-cpp/cmake/godotcpp.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/GodotCPPModule.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython3.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPython/Support.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/common_compiler_flags.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/android.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/ios.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/linux.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/macos.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/web.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/windows.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/CMake/share/cmake-4.3/Modules/ProcessorCount.cmake"
+		},
+		{
+			"path" : "godot-cpp/cmake/emsdkHack.cmake"
+		}
+	],
+	"kind" : "cmakeFiles",
+	"paths" : 
+	{
+		"build" : "C:/Users/Risuna Ndlovu/Downloads/polylang/build",
+		"source" : "C:/Users/Risuna Ndlovu/Downloads/polylang/polylang plugin"
+	},
+	"version" : 
+	{
+		"major" : 1,
+		"minor" : 1
+	}
+}
