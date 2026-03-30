@@ -58,6 +58,8 @@ jobs:
   build-linux:
     name: "Build — Linux x86_64"
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -185,8 +187,10 @@ jobs:
           set -euo pipefail
           mkdir -p ../dist_linux
           cp build/*.so ../dist_linux/
-          echo "=== Artifacts staged ==="
-          ls -la ../dist_linux/
+          cd ../dist_linux
+          sha256sum * > SHA256SUMS.txt
+          echo "=== Artifacts staged (with checksums) ==="
+          ls -la
 
       # ZT-14: if-no-files-found: error prevents empty uploads
       - name: Upload Linux artifacts
@@ -205,6 +209,8 @@ jobs:
   build-android:
     name: "Build — Android arm64-v8a (API 28)"
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -326,8 +332,10 @@ jobs:
           set -euo pipefail
           mkdir -p ../dist_android
           cp build_android/*.so ../dist_android/
-          echo "=== Artifacts staged ==="
-          ls -la ../dist_android/
+          cd ../dist_android
+          sha256sum * > SHA256SUMS.txt
+          echo "=== Artifacts staged (with checksums) ==="
+          ls -la
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
@@ -343,6 +351,8 @@ jobs:
   build-windows:
     name: "Build — Windows x64"
     runs-on: windows-2022
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: "polylang plugin"
@@ -393,7 +403,9 @@ jobs:
           New-Item -ItemType Directory -Path ../dist_win -Force | Out-Null
           Copy-Item build_win/Release/polylang.dll ../dist_win/
           Copy-Item build_win/Release/polylang.lib ../dist_win/ -ErrorAction SilentlyContinue
-          Get-ChildItem ../dist_win/
+          cd ../dist_win
+          Get-FileHash * -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.FileName)" } > SHA256SUMS.txt
+          Get-ChildItem
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
@@ -411,6 +423,8 @@ jobs:
     name: "Test — Odin adapter (dlopen)"
     runs-on: ubuntu-22.04
     needs: build-linux
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -428,7 +442,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends g++
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-linux-x86_64
           path: polylang plugin/build/
@@ -468,6 +482,8 @@ jobs:
     name: "Test — Odin sandbox escape"
     runs-on: ubuntu-22.04
     needs: build-linux
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -502,7 +518,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends g++
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc007d4c # v4.1.7
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-linux-x86_64
           path: polylang plugin/build/
@@ -589,6 +605,8 @@ jobs:
   release-package:
     name: "Package — Godot addon zip"
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     needs: [ build-linux, build-android, build-windows ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
