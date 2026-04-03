@@ -4,9 +4,18 @@ project(polylang VERSION 6.7.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# Options to control runtime/linker behavior (can mitigate dlopen/runtime crashes)
+option(PL_PRESERVE_RPATH "Preserve RPATH in built artifacts to allow runtime linking" ON)
+option(PL_ENABLE_BIND_NOW "Enable linker -z now (immediate symbol binding). May cause dlopen errors." OFF)
+option(PL_ENABLE_VISIBILITY_PRESET "Enable hidden symbol visibility preset (may hide symbols required by Godot)" OFF)
+option(PL_ENABLE_HARDENING "Enable deep hardening flags (may break plugin runtime)" OFF)
 
-# EZ-03: Strip RPATH information leaks
-set(CMAKE_SKIP_RPATH ON)
+if(PL_PRESERVE_RPATH)
+    message(STATUS "PL_PRESERVE_RPATH=ON: preserving RPATH in built artifacts")
+else()
+    # Strip RPATH information leaks (legacy behavior)
+    set(CMAKE_SKIP_RPATH ON)
+endif()
 
 # ── Android API guard ─────────────────────────────────────────
 # std::shared_mutex + std::atomic require Android API 28+ (Bionic).
@@ -38,31 +47,34 @@ else()
     set(PL_LIB_TYPE SHARED)
 endif()
 
-# ── Compiler hardening flags ─────────────────────────────────
+# ── Compiler hardening flags (guarded) ─────────────────────────────────
 # DZ-03, DZ-04, DZ-07: Deep Hardening Configuration
-# NOTE: Control Flow Guard (/guard:cf, -fcf-protection) and CETCOMPAT 
-# were removed because they cause instant crashes when Godot Engine 
-# executes dynamic GDExtension callback pointers!
+# NOTE: These flags can improve safety but may break runtime behavior for GDExtensions.
 set(PL_HARDEN_FLAGS "")
-if(MSVC)
-    # DZ-04: MSVC Deep Hardening removed.
-    # Manual MSVC overrides (/GS, /DYNAMICBASE, /NXCOMPAT, /sdl) cause fatal incompatibilities
-    # with the Godot Engine runtime plugin loader. We rely entirely on the engine's default
-    # Visual Studio compilation profile for Windows stability.
+if(PL_ENABLE_HARDENING)
+    if(MSVC)
+        # MSVC deep hardening intentionally skipped to preserve runtime compatibility.
+        message(STATUS "PL_ENABLE_HARDENING=ON: MSVC deep hardening is skipped")
+    else()
+        list(APPEND PL_HARDEN_FLAGS
+            -Wall -Wextra -Wno-unused-parameter
+            -fstack-protector-strong
+            $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
+            $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
+        )
+        if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+            list(APPEND PL_HARDEN_FLAGS -fPIE)
+        endif()
+        # RELRO is enabled; BIND_NOW is optional and controlled by PL_ENABLE_BIND_NOW.
+        if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS")
+            add_link_options(-Wl,-z,relro)
+            if(PL_ENABLE_BIND_NOW)
+                add_link_options(-Wl,-z,now)
+            endif()
+        endif()
+    endif()
 else()
-    list(APPEND PL_HARDEN_FLAGS
-        -Wall -Wextra -Wno-unused-parameter
-        -fstack-protector-strong
-        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
-        $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
-    )
-    if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
-        list(APPEND PL_HARDEN_FLAGS -fPIE)
-    endif()
-    # DZ-03: Full RELRO & BIND_NOW for all ELF targets
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS")
-        add_link_options(-Wl,-z,relro,-z,now)
-    endif()
+    message(STATUS "PL_ENABLE_HARDENING=OFF: skipping extra hardening flags to improve runtime compatibility")
 endif()
 
 # ── Core GDExtension library ──────────────────────────────────
@@ -101,12 +113,19 @@ target_include_directories(polylang PRIVATE include src)
 target_link_libraries(polylang PRIVATE godot::cpp)
 target_compile_options(polylang PRIVATE ${PL_HARDEN_FLAGS})
 # ZT-20: SOVERSION for ABI versioning on Linux
-set_target_properties(polylang PROPERTIES
-    PREFIX ""
-    CXX_VISIBILITY_PRESET    hidden
-    VISIBILITY_INLINES_HIDDEN ON
-    POSITION_INDEPENDENT_CODE ON
-)
+if(PL_ENABLE_VISIBILITY_PRESET)
+    set_target_properties(polylang PROPERTIES
+        PREFIX ""
+        CXX_VISIBILITY_PRESET    hidden
+        VISIBILITY_INLINES_HIDDEN ON
+        POSITION_INDEPENDENT_CODE ON
+    )
+else()
+    set_target_properties(polylang PROPERTIES
+        PREFIX ""
+        POSITION_INDEPENDENT_CODE ON
+    )
+endif()
 
 target_compile_definitions(polylang PRIVATE
     POLYLANG_VERSION_MAJOR=6
