@@ -47,7 +47,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_CPP_REF: "4.2"
+  GODOT_CPP_REF: "4.3"
   ANDROID_API:   "28"
   ANDROID_ABI:   "arm64-v8a"
 
@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           git clone https://github.com/godotengine/godot-cpp.git godot-cpp
           cd godot-cpp
-          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
+          git checkout d5cc777a89d899665fb61f1650ef0dc0cf6488c4
 
       - name: Cache godot-cpp build (Linux)
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
@@ -525,14 +525,15 @@ jobs:
         id: odin
         run: |
           set -uo pipefail
-          ODIN_VERSION="dev-2024-05"
-          ODIN_URL="https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.zip"
-          EXPECTED_HASH="fa6447833075c353909772bf6241b777a80b7b13766699eb31682855b77840ec"
+          ODIN_VERSION="dev-2026-04"
+          ODIN_URL="https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.tar.gz"
+          EXPECTED_HASH="8bfa62d459f505609cd0343746b4116f3e6866eb2d5b4b91bb8365db72f04e47"
           
-          curl -fsSL "$ODIN_URL" -o odin.zip
-          echo "$EXPECTED_HASH  odin.zip" | sha256sum -c - || { echo "FATAL: Odin compiler hash mismatch!"; exit 1; }
+          curl -fsSL "$ODIN_URL" -o odin.tar.gz
+          echo "$EXPECTED_HASH  odin.tar.gz" | sha256sum -c - || { echo "FATAL: Odin compiler hash mismatch!"; exit 1; }
           
-          unzip -q odin.zip -d odin_install
+          mkdir -p odin_install
+          tar -xzf odin.tar.gz -C odin_install --strip-components=1
           echo "$(pwd)/odin_install" >> $GITHUB_PATH
           echo "available=true" >> $GITHUB_OUTPUT
           echo "Odin compiler installed and verified"
