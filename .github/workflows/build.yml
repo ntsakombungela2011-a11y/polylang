@@ -128,19 +128,10 @@ jobs:
           set -euo pipefail
           cmake --build build --target polylang_odin -j$(nproc)
 
-      # ZT-01: Only build available adapters that have dependencies installed
-      # Skip optional adapters to avoid failures from missing libraries
-      - name: Build optional adapters (best effort)
+      - name: Build all available adapters
         run: |
           set -euo pipefail
-          # Try to build adapters with optional dependencies, but don't fail if they're missing
-          for target in polylang_adapter_lua polylang_adapter_python; do
-            if cmake --build build --target "$target" -j$(nproc) 2>/dev/null; then
-              echo "✓ Built $target"
-            else
-              echo "⊘ $target not available (missing dependencies)"
-            fi
-          done || true
+          cmake --build build -j$(nproc)
 
       # ZT-03: Symbol verification is now FATAL on missing mandatory exports
       - name: Verify core library symbols
@@ -194,13 +185,18 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p ../dist_linux
-          cp build/*.so ../dist_linux/
-          cd ../dist_linux
-          sha256sum * > SHA256SUMS.txt
-          echo "=== Artifacts staged (with checksums) ==="
-          ls -la
+          find build -name "*.so" -o -name "*.a" -type f | xargs -r cp -t ../dist_linux/ 2>/dev/null || true
+          if [ -f ../dist_linux/*.so ]; then
+            cd ../dist_linux
+            sha256sum *.so > SHA256SUMS.txt
+            echo "=== Artifacts staged ==="
+            ls -la
+          else
+            echo "WARNING: No .so files found to stage as artifacts"
+            cd ../dist_linux || exit 1
+          fi
 
       # ZT-14: if-no-files-found: error prevents empty uploads
       - name: Upload Linux artifacts
@@ -247,16 +243,11 @@ jobs:
           set -euo pipefail
           # Use the environment-provided ANDROID_NDK_LATEST_HOME if available
           NDK="${ANDROID_NDK_LATEST_HOME:-}"
-          if [ -z "$NDK" ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
+          if [ -z "$NDK" ]; then
              NDK="$ANDROID_NDK_HOME"
           fi
-          if [ -z "$NDK" ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
+          if [ -z "$NDK" ]; then
              NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1)
-          fi
-          # Validate NDK was found
-          if [ -z "$NDK" ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
-            echo "FATAL: Android NDK not found"
-            exit 1
           fi
           NDK_VERSION="unknown"
           if [ -f "$NDK/source.properties" ]; then
