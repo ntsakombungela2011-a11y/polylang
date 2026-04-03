@@ -3,5 +3,9 @@ entry_symbol = "polylang_init"
 compatibility_minimum = "4.2"
 
 [libraries]
-windows.debug.x86_64 = "res://addons/polylang/bin/polylang.dll"
-windows.release.x86_64 = "res://addons/polylang/bin/polylang.dll"
+windows.debug.x86_64 = "res://addons/polylang/bin/windows/polylang.dll"
+windows.release.x86_64 = "res://addons/polylang/bin/windows/polylang.dll"
+linux.debug.x86_64 = "res://addons/polylang/bin/linux/polylang.so"
+linux.release.x86_64 = "res://addons/polylang/bin/linux/polylang.so"
+android.debug.arm64 = "res://addons/polylang/bin/android/polylang.so"
+android.release.arm64 = "res://addons/polylang/bin/android/polylang.so"
