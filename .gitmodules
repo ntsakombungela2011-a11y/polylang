@@ -1,4 +1,8 @@
-; .gitmodules — intentionally empty
-; The CI downloads `godot-cpp` as a tarball and does not use git submodules.
-; Removing any broken submodule entries prevents the runner's `git submodule foreach`
-; cleanup from failing with "No url found for submodule path ...".
+; .gitmodules — explicitly declare godot-cpp to avoid cleanup failures
+; The CI downloads `godot-cpp` as a tarball and does not use git submodules,
+; but GitHub runner cleanup iterates entries in .gitmodules. Ensure the
+; submodule has a valid URL so `git submodule foreach` does not fail.
+
+[submodule "polylang plugin/godot-cpp"]
+	path = polylang plugin/godot-cpp
+	url = https://github.com/godotengine/godot-cpp.git
