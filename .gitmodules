@@ -1,0 +1,4 @@
+; .gitmodules — intentionally empty
+; The CI downloads `godot-cpp` as a tarball and does not use git submodules.
+; Removing any broken submodule entries prevents the runner's `git submodule foreach`
+; cleanup from failing with "No url found for submodule path ...".
