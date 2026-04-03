@@ -231,7 +231,7 @@ jobs:
           set -euo pipefail
           git clone https://github.com/godotengine/godot-cpp.git godot-cpp
           cd godot-cpp
-          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
+          git checkout d5cc777a89d899665fb61f1650ef0dc0cf6488c4
 
       # ZT-08: NDK discovery hardened to use latest environment-provided paths
       - name: Locate pre-installed NDK
@@ -370,11 +370,15 @@ jobs:
           submodules: false
           fetch-depth: 0
 
+      - name: Install CMake
+        run: winget install --id Kitware.CMake --exact --accept-source-agreements --accept-package-agreements
+        shell: pwsh
+
       - name: Clone godot-cpp (pinned)
         run: |
           git clone https://github.com/godotengine/godot-cpp.git godot-cpp
           cd godot-cpp
-          git checkout 4bc6e67d51df4c12e150fe4769911e239c627a47
+          git checkout d5cc777a89d899665fb61f1650ef0dc0cf6488c4
         shell: pwsh
 
       # ZT-07: Fixed cache path to include working-directory prefix
