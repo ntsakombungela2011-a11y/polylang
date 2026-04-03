@@ -1,0 +1,325 @@
+name: PolyLang CI
+
+on:
+  push:
+    branches: [main, develop, 'release/**']
+    paths:
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/tests/**'
+      - 'polylang plugin/CMakeLists.txt'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/tests/**'
+      - 'polylang plugin/CMakeLists.txt'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_CPP_REF: "4.3"
+  GODOT_CPP_COMMIT: "d5cc777a89d899665fb61f1650ef0dc0cf6488c4"
+  ANDROID_API: "28"
+  ANDROID_ABI: "arm64-v8a"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-linux:
+    name: Build — Linux x86_64
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: "polylang plugin"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone godot-cpp (pinned)
+        run: |
+          set -euo pipefail
+          rm -rf godot-cpp
+          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git fetch --depth 1 origin ${{ env.GODOT_CPP_COMMIT }}
+          git checkout ${{ env.GODOT_CPP_COMMIT }}
+
+      - name: Cache godot-cpp build (Linux)
+        uses: actions/cache@v4
+        with:
+          path: polylang plugin/godot-cpp/bin
+          key: godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-${{ env.GODOT_CPP_COMMIT }}
+          restore-keys: |
+            godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-12 g++-12 liblua5.4-dev python3-dev binutils
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          sudo apt-get install -y libquickjs-dev || echo "::notice::libquickjs-dev not available — JS/TS adapter will be skipped"
+
+      - name: CMake configure
+        run: |
+          set -euo pipefail
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOLYLANG_BUILD_ODIN_ADAPTER=ON -DPOLYLANG_BUILD_ODIN_TESTS=ON -DPOLYLANG_BUILD_TESTS=ON -DPOLYLANG_BUILD_SANDBOX_TESTS=OFF
+
+      - name: Build all
+        run: |
+          set -euo pipefail
+          cmake --build build -j"$(nproc)"
+
+      - name: Run sidecar config tests
+        run: |
+          set -euo pipefail
+          ./build/polylang_sidecar_tests
+
+      - name: Run Odin unit tests
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/polylang_odin_cache
+          ./build/polylang_odin_tests
+
+      - name: Prepare artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist_linux
+          find build -type f \( -name "*.so" -o -name "*.a" \) -exec cp {} ../dist_linux/ \;
+          cd ../dist_linux
+          ls -la
+          if ls *.so >/dev/null 2>&1; then
+            sha256sum *.so > SHA256SUMS.txt
+          else
+            echo "No .so files found" > SHA256SUMS.txt
+          fi
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          retention-days: 14
+          if-no-files-found: warn
+          path: dist_linux/
+
+  build-android:
+    name: Build — Android arm64-v8a (API 28)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: "polylang plugin"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone godot-cpp (pinned)
+        run: |
+          set -euo pipefail
+          rm -rf godot-cpp
+          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git fetch --depth 1 origin ${{ env.GODOT_CPP_COMMIT }}
+          git checkout ${{ env.GODOT_CPP_COMMIT }}
+
+      - name: Locate pre-installed NDK
+        id: ndk
+        run: |
+          set -euo pipefail
+          NDK="${ANDROID_NDK_LATEST_HOME:-}"
+          if [ -z "$NDK" ]; then NDK="${ANDROID_NDK_HOME:-}"; fi
+          if [ -z "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1); fi
+          NDK_VERSION="unknown"
+          if [ -f "$NDK/source.properties" ]; then
+            NDK_VERSION=$(grep 'Pkg.Revision' "$NDK/source.properties" | cut -d= -f2 | tr -d ' ')
+          fi
+          echo "NDK_HOME=$NDK" >> "$GITHUB_OUTPUT"
+          echo "NDK_VERSION=$NDK_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Cache godot-cpp build (Android)
+        uses: actions/cache@v4
+        with:
+          path: polylang plugin/godot-cpp/bin
+          key: godot-cpp-${{ runner.os }}-android-${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_COMMIT }}
+          restore-keys: |
+            godot-cpp-${{ runner.os }}-android-${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build
+
+      - name: CMake configure (Android)
+        run: |
+          set -euo pipefail
+          cmake -B build_android -G Ninja -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.NDK_HOME }}/build/cmake/android.toolchain.cmake -DANDROID_ABI=${{ env.ANDROID_ABI }} -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} -DCMAKE_BUILD_TYPE=Release -DANDROID_STL=c++_shared -DPOLYLANG_BUILD_ODIN_ADAPTER=ON -DPOLYLANG_BUILD_TESTS=OFF
+
+      - name: Build Android
+        run: |
+          set -euo pipefail
+          cmake --build build_android -j"$(nproc)"
+
+      - name: Prepare artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist_android
+          find build_android -type f -name "*.so" -exec cp {} ../dist_android/ \;
+          cd ../dist_android
+          ls -la
+          if ls *.so >/dev/null 2>&1; then
+            sha256sum *.so > SHA256SUMS.txt
+          else
+            echo "No .so files found" > SHA256SUMS.txt
+          fi
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-android-arm64-v8a
+          retention-days: 30
+          if-no-files-found: warn
+          path: dist_android/
+
+  build-windows:
+    name: Build — Windows x64
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: "polylang plugin"
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone godot-cpp (pinned)
+        run: |
+          if (Test-Path godot-cpp) { Remove-Item -Recurse -Force godot-cpp }
+          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
+          cd godot-cpp
+          git fetch --depth 1 origin $env:GODOT_CPP_COMMIT
+          git checkout $env:GODOT_CPP_COMMIT
+
+      - name: Cache godot-cpp build (Windows)
+        uses: actions/cache@v4
+        with:
+          path: polylang plugin/godot-cpp/bin
+          key: godot-cpp-${{ runner.os }}-msvc2022-${{ env.GODOT_CPP_COMMIT }}
+          restore-keys: |
+            godot-cpp-${{ runner.os }}-msvc2022-
+
+      - name: Clean previous CMake cache (Windows)
+        run: |
+          if (Test-Path build_win) { Remove-Item -Recurse -Force build_win }
+          if (Test-Path CMakeCache.txt) { Remove-Item -Force CMakeCache.txt }
+
+      - name: CMake configure (MSVC)
+        run: |
+          cmake -B build_win -DCMAKE_BUILD_TYPE=Release -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF -DPOLYLANG_BUILD_TESTS=OFF
+
+      - name: Build
+        run: |
+          cmake --build build_win --config Release -j4
+
+      - name: Prepare artifacts
+        run: |
+          New-Item -ItemType Directory -Path ../dist_win -Force | Out-Null
+          if (Test-Path build_win/Release/polylang.dll) {
+            Copy-Item build_win/Release/polylang.dll ../dist_win/
+          }
+          if (Test-Path build_win/Release/polylang.lib) {
+            Copy-Item build_win/Release/polylang.lib ../dist_win/
+          }
+          Set-Location ../dist_win
+          Get-ChildItem
+          if (Test-Path *.dll) {
+            Get-FileHash *.dll -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower()) $($_.Path | Split-Path -Leaf)" } > SHA256SUMS.txt
+          } else {
+            "No .dll files found" | Out-File SHA256SUMS.txt
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-windows-x64
+          retention-days: 14
+          if-no-files-found: warn
+          path: dist_win/
+
+  release-package:
+    name: Package — Godot addon zip
+    runs-on: ubuntu-22.04
+    needs: [build-linux, build-android, build-windows]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: release/linux
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-android-arm64-v8a
+          path: release/android
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-windows-x64
+          path: release/windows
+
+      - name: Assemble Godot addon layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot_addon/addons/polylang/bin/linux
+          mkdir -p godot_addon/addons/polylang/bin/android
+          mkdir -p godot_addon/addons/polylang/bin/windows
+          mkdir -p godot_addon/addons/polylang/include
+          cp release/linux/polylang.so godot_addon/addons/polylang/bin/linux/ 2>/dev/null || true
+          cp release/android/polylang.so godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
+          cp release/windows/polylang.dll godot_addon/addons/polylang/bin/windows/ 2>/dev/null || true
+          cp release/linux/libpolylang_odin.so godot_addon/addons/polylang/bin/linux/ 2>/dev/null || true
+          cp release/android/libpolylang_odin.so godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
+          find release/linux -type f -name "libpolylang_adapter_*.so" -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
+          cp -r "polylang plugin/addons/polylang/." godot_addon/addons/polylang/
+          cp "polylang plugin/include/pl_adapter_vtable.h" godot_addon/addons/polylang/include/
+
+      - name: Create addon zip and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(grep "project(polylang VERSION" "polylang plugin/CMakeLists.txt" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "6.7.0")
+          cd godot_addon
+          ZIP_NAME="polylang_v${VERSION}_addon.zip"
+          zip -r "../$ZIP_NAME" addons/
+          cd ..
+          sha256sum "$ZIP_NAME" > SHA256SUMS.txt
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-godot-addon
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            *.zip
+            SHA256SUMS.txt
