@@ -74,22 +74,13 @@ jobs:
           submodules: false
           fetch-depth: 0
 
-      # godot-cpp is NOT a submodule in this repo — clone it manually and pin to a specific commit
-      - name: Clone godot-cpp (pinned)
+      - name: Download godot-cpp source archive (pinned)
         run: |
           set -euo pipefail
-          rm -rf godot-cpp
-          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
-          cd godot-cpp
-          git fetch --depth 1 origin ${{ env.GODOT_CPP_COMMIT }}
-          git checkout ${{ env.GODOT_CPP_COMMIT }}
-
-      - name: Cache godot-cpp build (Linux)
-        uses: actions/cache@v4
-        with:
-          path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-${{ env.GODOT_CPP_COMMIT }}
-          restore-keys: godot-cpp-${{ runner.os }}-gcc12-${{ env.GODOT_CPP_REF }}-
+          rm -rf godot-cpp godot-cpp.tar.gz
+          curl -L "https://github.com/godotengine/godot-cpp/archive/${{ env.GODOT_CPP_COMMIT }}.tar.gz" -o godot-cpp.tar.gz
+          tar -xzf godot-cpp.tar.gz
+          mv godot-cpp-${{ env.GODOT_CPP_COMMIT }} godot-cpp
 
       - name: Install dependencies
         run: |
@@ -241,14 +232,13 @@ jobs:
           submodules: false
           fetch-depth: 0
 
-      - name: Clone godot-cpp (pinned)
+      - name: Download godot-cpp source archive (pinned)
         run: |
           set -euo pipefail
-          rm -rf godot-cpp
-          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
-          cd godot-cpp
-          git fetch --depth 1 origin ${{ env.GODOT_CPP_COMMIT }}
-          git checkout ${{ env.GODOT_CPP_COMMIT }}
+          rm -rf godot-cpp godot-cpp.tar.gz
+          curl -L "https://github.com/godotengine/godot-cpp/archive/${{ env.GODOT_CPP_COMMIT }}.tar.gz" -o godot-cpp.tar.gz
+          tar -xzf godot-cpp.tar.gz
+          mv godot-cpp-${{ env.GODOT_CPP_COMMIT }} godot-cpp
 
       # ZT-08: NDK discovery hardened to use latest environment-provided paths
       - name: Locate pre-installed NDK
@@ -270,14 +260,6 @@ jobs:
           echo "NDK_HOME=$NDK" >> $GITHUB_OUTPUT
           echo "NDK_VERSION=$NDK_VERSION" >> $GITHUB_OUTPUT
           echo "Using NDK: $NDK (version: $NDK_VERSION)"
-
-      # ZT-06: Cache key now includes NDK version
-      - name: Cache godot-cpp build (Android)
-        uses: actions/cache@v4
-        with:
-          path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-${{ runner.os }}-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-${{ env.GODOT_CPP_COMMIT }}
-          restore-keys: godot-cpp-${{ runner.os }}-android-ndk${{ steps.ndk.outputs.NDK_VERSION }}-api${{ env.ANDROID_API }}-${{ env.ANDROID_ABI }}-
 
       - name: Install build tools
         run: |
@@ -400,22 +382,14 @@ jobs:
           submodules: false
           fetch-depth: 0
 
-      - name: Clone godot-cpp (pinned)
+      - name: Download godot-cpp source archive (pinned)
         run: |
           if (Test-Path godot-cpp) { Remove-Item -Recurse -Force godot-cpp }
-          git clone --depth 1 https://github.com/godotengine/godot-cpp.git godot-cpp
-          cd godot-cpp
-          git fetch --depth 1 origin $env:GODOT_CPP_COMMIT
-          git checkout $env:GODOT_CPP_COMMIT
+          if (Test-Path godot-cpp.zip) { Remove-Item -Force godot-cpp.zip }
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot-cpp/archive/${env:GODOT_CPP_COMMIT}.zip" -OutFile godot-cpp.zip
+          Expand-Archive -Path godot-cpp.zip -DestinationPath .
+          Move-Item "godot-cpp-$env:GODOT_CPP_COMMIT" "godot-cpp"
         shell: pwsh
-
-      # ZT-07: Fixed cache path to include working-directory prefix
-      - name: Cache godot-cpp build (Windows)
-        uses: actions/cache@v4
-        with:
-          path: polylang plugin/godot-cpp/bin
-          key: godot-cpp-${{ runner.os }}-msvc2022-${{ env.GODOT_CPP_COMMIT }}
-          restore-keys: godot-cpp-${{ runner.os }}-msvc2022-
 
       # ZT-10: Remove any stale CMake cache/build dir before configure to prevent path errors
       - name: Clean previous CMake cache (Windows)
@@ -713,6 +687,12 @@ jobs:
         with:
           name: polylang-windows-x64
           path: release/windows
+
+      - name: Install packaging tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip
 
       - name: Prepare Godot addon structure
         run: |
