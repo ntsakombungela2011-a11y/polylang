@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -x
+
+echo "=== Host info ==="
+uname -a
+echo "=== PATH ==="
+echo "$PATH"
+echo "=== Current dir ==="
+pwd
 
 echo "=== Checking for artifacts ==="
 ls -la release/ || true
