@@ -692,19 +692,19 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-linux-x86_64
-          path: godot_addon/addons/polylang/bin/linux/
+          path: release/linux
 
       - name: Download Android artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-android-arm64-v8a
-          path: godot_addon/addons/polylang/bin/android/
+          path: release/android
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: polylang-windows-x64
-          path: godot_addon/addons/polylang/bin/windows/
+          path: release/windows
 
       - name: Prepare Godot addon structure
         run: |
@@ -712,33 +712,7 @@ jobs:
           mkdir -p godot_addon/addons/polylang
           echo "=== Addon structure ==="
           find godot_addon -type f | sort
-
-      # ZT-16, DZ-09: Package with cryptographic manifest
-      - name: Create addon zip and checksum
-        run: |
-          set -euo pipefail
-          VERSION=$(grep "VERSION" "polylang plugin/CMakeLists.txt" | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "6.7.0")
-          if [ -z "$VERSION" ]; then
-            VERSION="6.7.0"
-          fi
-          echo "Packaging version: $VERSION"
-          cd godot_addon
-          ZIP_NAME="polylang_v${VERSION}_addon.zip"
-          zip -r "../$ZIP_NAME" addons/
-          cd ..
-          sha256sum "$ZIP_NAME" > "SHA256SUMS.txt"
-          echo "=== SHA256 Checksum ==="
-          cat "SHA256SUMS.txt"
-
-      - name: Upload release package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.1
-        with:
-          name: polylang-godot-addon
-          retention-days: 90
-          if-no-files-found: error
-          path: |
-            *.zip
-            SHA256SUMS.txt
+      
 
       - name: Verify release artifacts
         run: |
