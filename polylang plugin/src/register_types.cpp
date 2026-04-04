@@ -79,6 +79,25 @@ static void c_signal_emit(const char* name, PLValue* args, int32_t argc) {
     bus->emit_native(name ? name : "", gd_args);
 }
 
+static uint64_t c_signal_connect_native(const char* signal_name,
+                              void (*callback)(PLValue* args, int32_t argc, void* userdata),
+                              void* userdata) {
+    auto* bus = PLSignalBus::get_singleton();
+    if (!bus || !signal_name || !callback) return 0;
+    std::string sname(signal_name);
+    return bus->connect_native(
+        sname,
+        [callback, userdata](const godot::Array& arr) {
+            const int32_t n = std::min((int)arr.size(), 16);
+            PLValue pl_args[16];
+            for (int32_t i = 0; i < n; ++i)
+                VariantBridge::to_pl_value(arr[i], pl_args[i]);
+            callback(pl_args, n, userdata);
+            for (int32_t i = 0; i < n; ++i)
+                VariantBridge::free_pl_value(pl_args[i]);
+        });
+}
+
 // FIX C-7: Implemented signal_connect shim.
 static void c_signal_connect(const char* signal_name,
                               void (*callback)(PLValue* args, int32_t argc, void* userdata),
@@ -129,6 +148,12 @@ static void c_signal_disconnect(const char* signal_name, void* userdata) {
     }
 }
 
+static void c_signal_disconnect_native(uint64_t listener_id) {
+    auto* bus = PLSignalBus::get_singleton();
+    if (!bus || listener_id == 0) return;
+    bus->disconnect_native(listener_id);
+}
+
 static int c_resource_fetch(const char* path, PLValue* out) {
     return PLResourceBridge::pl_resource_fetch_impl(path, out, SandboxTier::Trusted);
 }
@@ -137,57 +162,37 @@ static void c_resource_release(PLValue* v) {
 }
 static void c_profiler_begin(const char* lbl) { PLProfiler::pl_profiler_begin_impl(lbl); }
 static void c_profiler_end(const char* lbl)   { PLProfiler::pl_profiler_end_impl(lbl);   }
+static int c_bridge_call(const char* path, const char* method,
+                         PLValue* args, int32_t argc, PLValue* ret) {
+    auto* bridge = PolyLangBridge::get_singleton();
+    if (!bridge) {
+        pl_value_init(ret);
+        return PL_ERR_GENERIC;
+    }
+    return bridge->call_native(path ? path : "", method ? method : "", args, argc, ret);
+}
 static int  c_engine_call(const char* g, const char* m, PLValue* a, int32_t n, PLValue* r) {
     return PLEngineAPIBridge::pl_engine_call_trusted(g, m, a, n, r);
 }
 
-// Odin-specific injection (weak symbol from adapter).
-extern "C" void PL_WEAK polylang_odin_inject_services(
-    void(*)(const char*, PLValue*, int32_t),
-    void(*)(const char*, void(*)(PLValue*, int32_t, void*), void*),
-    int(*)(const char*, PLValue*),
-    void(*)(PLValue*),
-    void(*)(const char*),
-    void(*)(const char*),
-    int(*)(const char*, const char*, PLValue*, int32_t, PLValue*)
-);
-
 static void inject_all_adapter_services() {
-    // Build the full services struct once.
-    PLRuntimeServices svc{};
-    svc.signal_emit       = c_signal_emit;
-    svc.signal_connect    = c_signal_connect;    // FIX C-7
-    svc.signal_disconnect = c_signal_disconnect; // FIX C-7
-    svc.resource_fetch    = c_resource_fetch;
-    svc.resource_release  = c_resource_release;
-    svc.profiler_begin    = c_profiler_begin;
-    svc.profiler_end      = c_profiler_end;
-    svc.engine_call       = c_engine_call;
-    svc.call_super        = PLCrossInherit::pl_call_super_impl; // FIX C-8
+    RuntimeServiceBindings bindings{};
+    bindings.generic.signal_emit       = c_signal_emit;
+    bindings.generic.signal_connect    = c_signal_connect;    // FIX C-7
+    bindings.generic.signal_disconnect = c_signal_disconnect; // FIX C-7
+    bindings.generic.resource_fetch    = c_resource_fetch;
+    bindings.generic.resource_release  = c_resource_release;
+    bindings.generic.profiler_begin    = c_profiler_begin;
+    bindings.generic.profiler_end      = c_profiler_end;
+    bindings.generic.engine_call       = c_engine_call;
+    bindings.generic.call_super        = PLCrossInherit::pl_call_super_impl; // FIX C-8
+    bindings.bridge_call               = c_bridge_call;
+    bindings.signal_connect_native     = c_signal_connect_native;
+    bindings.signal_disconnect_native  = c_signal_disconnect_native;
 
-    // Odin adapter (dedicated injection entry point).
-#ifdef _WIN32
-    // On Windows, weak symbols from other DLLs don't work like this.
-    // We should use GetProcAddress or a registration-based approach.
-    // For now, we skip the direct call to avoid link errors.
-#else
-    if (polylang_odin_inject_services) {
-        polylang_odin_inject_services(
-            c_signal_emit, c_signal_connect,
-            c_resource_fetch, c_resource_release,
-            c_profiler_begin, c_profiler_end, c_engine_call);
-    }
-#endif
-
-    // Generic pl_inject_services hook for all other adapters.
     auto* rm = RuntimeManager::get_singleton();
     if (!rm) return;
-    for (int i = 0; i < LANGUAGE_COUNT; ++i) {
-        auto lid = static_cast<LanguageID>(i);
-        auto* vt = rm->get_vtable(lid);
-        if (!vt || !vt->pl_inject_services) continue;
-        vt->pl_inject_services(&svc);
-    }
+    rm->set_service_bindings(bindings);
 }
 
 // ── initialize ────────────────────────────────────────────────
@@ -255,6 +260,7 @@ void uninitialize_polylang(ModuleInitializationLevel p_level) {
 
     // Stop background threads before any singleton teardown.
     if (async_runtime_singleton)       async_runtime_singleton->stop();
+    if (resource_bridge_singleton)     resource_bridge_singleton->shutdown();
 
     // FIX C-4: Disconnect all signal listeners before scheduler is deleted.
     if (coro_scheduler_singleton)      coro_scheduler_singleton->shutdown();

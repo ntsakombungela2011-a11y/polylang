@@ -26,6 +26,7 @@
 #include "compile_cache.hpp"
 #include "runtime_manager.hpp"
 #include "hot_reload_scheduler.hpp"
+#include "pl_cross_inherit.hpp"
 #include "pl_export_parser.hpp"
 
 #include <godot_cpp/classes/file_access.hpp>
@@ -63,6 +64,10 @@ PolyLangScript::~PolyLangScript() {
         vtable_->pl_free_compiled(pending_handle_);
         pending_handle_ = nullptr;
     }
+
+    std::string path = get_path().utf8().get_data();
+    if (!path.empty())
+        PLCrossInherit::get_singleton()->unregister(path);
 
 }
 

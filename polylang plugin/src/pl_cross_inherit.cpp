@@ -11,6 +11,7 @@
 #include "pl_cross_inherit.hpp"
 
 #include "pl_bridge.hpp"
+#include "pl_polyglot_script.hpp"
 #include "runtime_manager.hpp"
 #include "variant_bridge.hpp"
 #include "polylang_script_instance.hpp"
@@ -155,9 +156,16 @@ int PLCrossInherit::get_on_base(const std::string& base_path,
 
     if (is_polylang) {
         auto* reg  = PLScriptRegistry::get_singleton();
-        auto* inst = reg ? reg->find_instance(base_path) : nullptr;
-        if (!inst) return PL_ERR_GENERIC;
-        return inst->get_property_direct(prop, ret);
+        PLScriptHandle handle = reg ? reg->find_handle(base_path) : PLScriptHandle{};
+        if (!handle.valid()) return PL_ERR_GENERIC;
+        switch (handle.kind) {
+            case PLScriptKind::PolyLang:
+                return static_cast<PolyLangScriptInstance*>(handle.ptr)
+                    ->get_property_direct(prop, ret);
+            case PLScriptKind::Polyglot:
+                return static_cast<PolyglotInstance*>(handle.ptr)
+                    ->get_property_direct(prop, ret);
+        }
     }
 
     godot::Variant val = owner->get(godot::StringName(prop));
@@ -178,9 +186,16 @@ int PLCrossInherit::set_on_base(const std::string& base_path,
 
     if (is_polylang) {
         auto* reg  = PLScriptRegistry::get_singleton();
-        auto* inst = reg ? reg->find_instance(base_path) : nullptr;
-        if (!inst) return PL_ERR_GENERIC;
-        return inst->set_property_direct(prop, val);
+        PLScriptHandle handle = reg ? reg->find_handle(base_path) : PLScriptHandle{};
+        if (!handle.valid()) return PL_ERR_GENERIC;
+        switch (handle.kind) {
+            case PLScriptKind::PolyLang:
+                return static_cast<PolyLangScriptInstance*>(handle.ptr)
+                    ->set_property_direct(prop, val);
+            case PLScriptKind::Polyglot:
+                return static_cast<PolyglotInstance*>(handle.ptr)
+                    ->set_property_direct(prop, val);
+        }
     }
 
     godot::Variant gv = VariantBridge::from_pl_value(*val);

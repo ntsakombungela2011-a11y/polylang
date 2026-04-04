@@ -12,6 +12,9 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "pl_export_parser.hpp"
+#include "pl_bridge.hpp"
+#include "pl_cross_inherit.hpp"
+#include "polylang_language.hpp"
 #include "pl_sandbox_tiers.hpp"
 #include "runtime_manager.hpp"
 #include "variant_bridge.hpp"
@@ -60,7 +63,11 @@ static bool is_fanout(const std::string& name) {
 // ── PolyglotScript ────────────────────────────────────────────
 
 PolyglotScript::PolyglotScript() = default;
-PolyglotScript::~PolyglotScript() = default;
+PolyglotScript::~PolyglotScript() {
+    std::string path = get_path().utf8().get_data();
+    if (!path.empty())
+        PLCrossInherit::get_singleton()->unregister(path);
+}
 
 void PolyglotScript::_bind_methods() {
     // Expose to GDScript: get block count, list languages
@@ -83,7 +90,12 @@ godot::StringName PolyglotScript::_get_instance_base_type() const {
 }
 
 godot::Ref<godot::Script> PolyglotScript::_get_base_script() const {
-    return godot::Ref<godot::Script>();
+    auto it = header_.extra.find("base_script");
+    if (it == header_.extra.end() || it->second.empty()) return godot::Ref<godot::Script>();
+    auto* loader = godot::ResourceLoader::get_singleton();
+    if (!loader) return godot::Ref<godot::Script>();
+    godot::Ref<godot::Resource> res = loader->load(godot::String(it->second.c_str()));
+    return godot::Ref<godot::Script>(res);
 }
 
 godot::StringName PolyglotScript::_get_global_name() const {
@@ -92,6 +104,10 @@ godot::StringName PolyglotScript::_get_global_name() const {
 
 bool PolyglotScript::_inherits_script(const godot::Ref<godot::Script>&) const {
     return false;
+}
+
+godot::ScriptLanguage* PolyglotScript::_get_language() const {
+    return PolyLangLanguage::get_singleton();
 }
 
 bool PolyglotScript::_has_method(const godot::StringName& method) const {
@@ -154,20 +170,23 @@ std::unique_ptr<BlockHandle> PolyglotScript::compile_block(const PolyBlock& bloc
         return nullptr;
     }
 
-    // Determine sandbox tier for this block's contribution to the polyglot path.
-    std::string pseudo_path = res_path_ + "#" + block.language;
-    rm->maybe_register_sidecar(pseudo_path);
+    // Resolve sandboxing from the real script path, then compile each block
+    // under a synthetic per-language path for diagnostics/cache separation.
+    rm->maybe_register_sidecar(res_path_);
+    std::string compile_path = res_path_.empty()
+        ? ("polyglot://" + block.language)
+        : (res_path_ + "#" + block.language);
 
-    bool     sandboxed    = rm->is_sandboxed(pseudo_path);
-    uint32_t allowed_caps = rm->sandboxed_caps(pseudo_path);
+    bool     sandboxed    = rm->is_sandboxed(res_path_);
+    uint32_t allowed_caps = rm->sandboxed_caps(res_path_);
 
     void* compiled = nullptr;
     if (sandboxed && vt->pl_compile_sandboxed) {
         compiled = vt->pl_compile_sandboxed(block.source.c_str(),
-                                             pseudo_path.c_str(),
+                                             compile_path.c_str(),
                                              allowed_caps);
     } else if (vt->pl_compile) {
-        compiled = vt->pl_compile(block.source.c_str(), pseudo_path.c_str());
+        compiled = vt->pl_compile(block.source.c_str(), compile_path.c_str());
     }
 
     if (!compiled) {
@@ -188,6 +207,9 @@ std::unique_ptr<BlockHandle> PolyglotScript::compile_block(const PolyBlock& bloc
 
 // ── Full compile pass ─────────────────────────────────────────
 godot::Error PolyglotScript::compile_all(bool /*keep_state*/) {
+    res_path_ = get_path().utf8().get_data();
+    is_polyglot_ = PolyglotParser::is_polyglot_path(res_path_);
+
     std::string src = source_.utf8().get_data();
     if (src.empty() && !res_path_.empty()) {
         // Load from file if source not set.
@@ -207,6 +229,13 @@ godot::Error PolyglotScript::compile_all(bool /*keep_state*/) {
     }
 
     header_ = parsed.header;
+    auto it = header_.extra.find("base_script");
+    if (!res_path_.empty()) {
+        if (it != header_.extra.end() && !it->second.empty())
+            PLCrossInherit::get_singleton()->register_base(res_path_, it->second);
+        else
+            PLCrossInherit::get_singleton()->unregister(res_path_);
+    }
     // Merge same-language blocks before compiling.
     auto merged = PolyglotParser::merge_blocks(parsed.blocks);
 
@@ -229,6 +258,8 @@ godot::Error PolyglotScript::compile_all(bool /*keep_state*/) {
 }
 
 godot::Error PolyglotScript::_reload(bool keep_state) {
+    res_path_ = get_path().utf8().get_data();
+    is_polyglot_ = PolyglotParser::is_polyglot_path(res_path_);
     return compile_all(keep_state);
 }
 
@@ -342,9 +373,18 @@ PolyglotInstance::PolyglotInstance(PolyglotScript* script, godot::Object* owner)
         }
         instances_.push_back(std::move(bi));
     }
+
+    if (script_ && PLScriptRegistry::get_singleton()) {
+        std::string path = script_->get_path().utf8().get_data();
+        PLScriptRegistry::get_singleton()->register_polyglot(path, owner_, this);
+    }
 }
 
 PolyglotInstance::~PolyglotInstance() {
+    if (script_ && PLScriptRegistry::get_singleton()) {
+        std::string path = script_->get_path().utf8().get_data();
+        PLScriptRegistry::get_singleton()->unregister_polyglot(path, owner_, this);
+    }
     std::unique_lock lk(inst_mutex_);
     for (auto& bi : instances_) {
         if (!bi) continue;
@@ -400,6 +440,93 @@ int PolyglotInstance::call_first_block(const char* method,
         return bi->block->vtable->pl_call_method(fi, method, args, argc, ret);
     }
     return PL_ERR_METHOD_NOT_FOUND;
+}
+
+int PolyglotInstance::call_method_direct(const char* method,
+                                          PLValue* args, int32_t argc,
+                                          PLValue* ret) {
+    if (!method || !*method) {
+        pl_value_init(ret);
+        return PL_ERR_GENERIC;
+    }
+    return is_fanout(method)
+        ? call_all_blocks(method, args, argc, ret)
+        : call_first_block(method, args, argc, ret);
+}
+
+int PolyglotInstance::get_property_direct(const char* name, PLValue* ret) {
+    pl_value_init(ret);
+    if (!name || !*name) return PL_ERR_GENERIC;
+    std::shared_lock lk(inst_mutex_);
+    for (auto& bi : instances_) {
+        if (!bi || !bi->block || !bi->block->vtable || !bi->block->vtable->pl_get_property)
+            continue;
+        void* fi = bi->foreign.load(std::memory_order_acquire);
+        if (!fi) continue;
+        int rc = bi->block->vtable->pl_get_property(fi, name, ret);
+        if (rc == PL_OK) return PL_OK;
+    }
+    return PL_ERR_GENERIC;
+}
+
+int PolyglotInstance::set_property_direct(const char* name, const PLValue* value) {
+    if (!name || !*name || !value) return PL_ERR_GENERIC;
+    std::shared_lock lk(inst_mutex_);
+    for (auto& bi : instances_) {
+        if (!bi || !bi->block || !bi->block->vtable || !bi->block->vtable->pl_set_property)
+            continue;
+        void* fi = bi->foreign.load(std::memory_order_acquire);
+        if (!fi) continue;
+        int rc = bi->block->vtable->pl_set_property(fi, name, value);
+        if (rc == PL_OK) return PL_OK;
+    }
+    return PL_ERR_GENERIC;
+}
+
+void PolyglotInstance::free_value_contents(PLValue* value) const {
+    if (!value) return;
+    std::shared_lock lk(inst_mutex_);
+    for (const auto& bi : instances_) {
+        if (!bi || !bi->block || !bi->block->vtable) continue;
+        if (bi->block->vtable->pl_free_value_contents) {
+            bi->block->vtable->pl_free_value_contents(value);
+            return;
+        }
+    }
+    VariantBridge::free_pl_value(*value);
+}
+
+bool PolyglotInstance::resolve_method_target(const char* method_name,
+                                              uint32_t capability_mask,
+                                              PLAdapterVTable** out_vtable,
+                                              void** out_foreign) const {
+    if (out_vtable)  *out_vtable = nullptr;
+    if (out_foreign) *out_foreign = nullptr;
+
+    auto try_scan = [&](bool require_has_method) -> bool {
+        std::shared_lock lk(inst_mutex_);
+        for (const auto& bi : instances_) {
+            if (!bi || !bi->block || !bi->block->vtable) continue;
+            auto* vt = bi->block->vtable;
+            if ((vt->capabilities & capability_mask) != capability_mask) continue;
+            if (method_name && *method_name) {
+                if (vt->pl_has_method) {
+                    if (!vt->pl_has_method(bi->block->compiled, method_name)) continue;
+                } else if (require_has_method) {
+                    continue;
+                }
+            }
+            void* fi = bi->foreign.load(std::memory_order_acquire);
+            if (!fi) continue;
+            if (out_vtable)  *out_vtable = vt;
+            if (out_foreign) *out_foreign = fi;
+            return true;
+        }
+        return false;
+    };
+
+    if (try_scan(true)) return true;
+    return try_scan(false);
 }
 
 void PolyglotInstance::hot_swap(

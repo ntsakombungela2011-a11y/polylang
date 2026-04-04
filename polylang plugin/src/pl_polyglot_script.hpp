@@ -97,6 +97,7 @@ public:
     godot::Ref<godot::Script> _get_base_script() const override;
     godot::StringName _get_global_name() const override;
     bool      _inherits_script(const godot::Ref<godot::Script>& script) const override;
+    godot::ScriptLanguage* _get_language() const override;
     void*     _instance_create(godot::Object* for_object) const override;
     void*     _placeholder_instance_create(godot::Object* for_object) const override;
 
@@ -206,6 +207,13 @@ public:
 
     // Built-in lifecycle methods that fan-out to ALL implementing blocks.
     static const std::vector<std::string>& fanout_methods();
+
+    int  call_method_direct(const char* method, PLValue* args, int32_t argc, PLValue* ret);
+    int  get_property_direct(const char* name, PLValue* ret);
+    int  set_property_direct(const char* name, const PLValue* value);
+    void free_value_contents(PLValue* value) const;
+    bool resolve_method_target(const char* method_name, uint32_t capability_mask,
+                               PLAdapterVTable** out_vtable, void** out_foreign) const;
 
 private:
     // Dispatch a method call to ALL blocks that implement it.

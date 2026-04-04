@@ -25,15 +25,9 @@ func _enter_tree() -> void:
 	_mod_panel = MOD_LOADER_PANEL.new()
 	add_control_to_dock(DOCK_SLOT_LEFT_BR, _mod_panel)
 
-	# Register .poly as a recognised script type.
-	add_custom_type(
-		"PolyglotScript",
-		"ScriptExtension",
-		preload("res://addons/polylang/polyglot_script_icon.svg"),
-		null
-	)
-
-	print("[PolyLang v6.4] Editor plugin loaded.")
+	# PolyglotScript is a native GDExtension class registered from C++.
+	# add_custom_type() is only for script-defined editor types.
+	print("[PolyLang v6.7] Editor plugin loaded.")
 
 func _exit_tree() -> void:
 	if _profiler_panel:
@@ -45,7 +39,6 @@ func _exit_tree() -> void:
 	if _mod_panel:
 		remove_control_from_docks(_mod_panel)
 		_mod_panel.queue_free()
-	remove_custom_type("PolyglotScript")
 
 func _get_plugin_name() -> String:
 	return "PolyLang"

@@ -28,7 +28,9 @@
 //           already guards with active_.find() == active_.end() check.
 // =============================================================
 #include "pl_coroutine_scheduler.hpp"
+#include "pl_bridge.hpp"
 #include "pl_signal_bus.hpp"
+#include "pl_polyglot_script.hpp"
 #include "polylang_script_instance.hpp"
 
 #include <godot_cpp/core/error_macros.hpp>
@@ -272,9 +274,31 @@ void PLCoroutineScheduler::tick(double delta_seconds) {
 // ── GDScript API ──────────────────────────────────────────────
 
 static PLAdapterVTable* vtable_from_owner(godot::Object* owner, void** foreign_out) {
-    if (!owner) return nullptr;
-    (void)foreign_out;
-    return nullptr;
+    if (foreign_out) *foreign_out = nullptr;
+    auto* reg = PLScriptRegistry::get_singleton();
+    if (!owner || !reg) return nullptr;
+
+    PLScriptHandle handle = reg->find_owner(owner);
+    if (!handle.valid()) return nullptr;
+
+    PLAdapterVTable* vt = nullptr;
+    void* foreign = nullptr;
+    bool ok = false;
+
+    switch (handle.kind) {
+        case PLScriptKind::PolyLang:
+            ok = static_cast<PolyLangScriptInstance*>(handle.ptr)
+                ->resolve_method_target(nullptr, PL_CAP_COROUTINE, &vt, &foreign);
+            break;
+        case PLScriptKind::Polyglot:
+            ok = static_cast<PolyglotInstance*>(handle.ptr)
+                ->resolve_method_target(nullptr, PL_CAP_COROUTINE, &vt, &foreign);
+            break;
+    }
+
+    if (!ok) return nullptr;
+    if (foreign_out) *foreign_out = foreign;
+    return vt;
 }
 
 int64_t PLCoroutineScheduler::spawn_next_frame(godot::Object* owner,

@@ -12,8 +12,11 @@ cp release/windows/polylang.dll godot_addon/addons/polylang/bin/windows/ 2>/dev/
 
 cp release/linux/libpolylang_odin.so    godot_addon/addons/polylang/bin/linux/  2>/dev/null || true
 cp release/android/libpolylang_odin.so  godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
+cp release/windows/polylang_odin.dll    godot_addon/addons/polylang/bin/windows/ 2>/dev/null || true
 
-find release/linux -name "libpolylang_adapter_*.so" -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
+find release/linux -name "polylang_adapter_*.so" -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
+find release/android -name "polylang_adapter_*.so" -exec cp {} godot_addon/addons/polylang/bin/android/ \; 2>/dev/null || true
+find release/windows -name "polylang_adapter_*.dll" -exec cp {} godot_addon/addons/polylang/bin/windows/ \; 2>/dev/null || true
 
 cp -r "polylang plugin/addons/polylang/." godot_addon/addons/polylang/ 2>/dev/null || true
 cp "polylang plugin/include/pl_adapter_vtable.h" godot_addon/addons/polylang/include/ 2>/dev/null || true

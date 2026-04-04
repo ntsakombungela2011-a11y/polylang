@@ -12,6 +12,9 @@
 //           No heap allocation, no race, no listener registration.
 // =============================================================
 #include "pl_async_runtime.hpp"
+#include "pl_bridge.hpp"
+#include "pl_polyglot_script.hpp"
+#include "polylang_script_instance.hpp"
 #include "pl_signal_bus.hpp"
 #include "variant_bridge.hpp"
 
@@ -22,6 +25,33 @@
 #include <sstream>
 
 namespace polylang {
+
+namespace {
+
+static bool resolve_async_target(godot::Object* owner,
+                                 const char* method_name,
+                                 PLAdapterVTable** out_vtable,
+                                 void** out_foreign) {
+    if (out_vtable)  *out_vtable = nullptr;
+    if (out_foreign) *out_foreign = nullptr;
+    auto* reg = PLScriptRegistry::get_singleton();
+    if (!owner || !reg) return false;
+
+    PLScriptHandle handle = reg->find_owner(owner);
+    if (!handle.valid()) return false;
+
+    switch (handle.kind) {
+        case PLScriptKind::PolyLang:
+            return static_cast<PolyLangScriptInstance*>(handle.ptr)
+                ->resolve_method_target(method_name, PL_CAP_ASYNC, out_vtable, out_foreign);
+        case PLScriptKind::Polyglot:
+            return static_cast<PolyglotInstance*>(handle.ptr)
+                ->resolve_method_target(method_name, PL_CAP_ASYNC, out_vtable, out_foreign);
+    }
+    return false;
+}
+
+} // namespace
 
 PLAsyncRuntime* PLAsyncRuntime::singleton_ = nullptr;
 PLAsyncRuntime* PLAsyncRuntime::get_singleton() { return singleton_; }
@@ -199,12 +229,35 @@ void PLAsyncRuntime::poll_loop() {
 
 // ── GDScript API ──────────────────────────────────────────────
 
-int64_t PLAsyncRuntime::submit_method(godot::Object* /*owner*/,
-                                       const godot::String& /*method*/,
-                                       const godot::Array&  /*args*/,
-                                       const godot::Callable& /*on_done*/) {
-    ERR_PRINT("[PolyLang/Async] submit_method: script instance resolution not yet wired.");
-    return 0;
+int64_t PLAsyncRuntime::submit_method(godot::Object* owner,
+                                       const godot::String& method,
+                                       const godot::Array&  args,
+                                       const godot::Callable& on_done) {
+    std::string m = method.utf8().get_data();
+    if (m.empty()) return 0;
+
+    PLAdapterVTable* vt = nullptr;
+    void* foreign = nullptr;
+    if (!resolve_async_target(owner, m.c_str(), &vt, &foreign) ||
+        !vt || !foreign || !vt->pl_async_begin) {
+        ERR_PRINT("[PolyLang/Async] submit_method: no async-capable PolyLang instance for owner.");
+        return 0;
+    }
+
+    int32_t argc = static_cast<int32_t>(args.size());
+    std::vector<PLValue> pl_args(argc);
+    for (int32_t i = 0; i < argc; ++i)
+        VariantBridge::to_pl_value(args[i], pl_args[i]);
+
+    void* future = vt->pl_async_begin(foreign, m.c_str(), pl_args.data(), argc);
+
+    for (auto& v : pl_args) {
+        if (vt->pl_free_value_contents) vt->pl_free_value_contents(&v);
+        else VariantBridge::free_pl_value(v);
+    }
+
+    if (!future) return 0;
+    return (int64_t)submit(vt, future, on_done);
 }
 
 void PLAsyncRuntime::gd_cancel(int64_t id) { cancel((uint64_t)id); }

@@ -47,6 +47,24 @@
 
 namespace polylang {
 
+namespace {
+
+static godot::String platform_bin_dir() {
+#if defined(_WIN32)
+    return "windows/";
+#elif defined(__ANDROID__)
+    return "android/";
+#elif defined(__APPLE__)
+    return "macos/";
+#elif defined(__linux__)
+    return "linux/";
+#else
+    return "";
+#endif
+}
+
+} // namespace
+
 PolyLangLanguage* PolyLangLanguage::singleton_ = nullptr;
 
 PolyLangLanguage::PolyLangLanguage() { singleton_ = this; }
@@ -63,15 +81,24 @@ PolyLangLanguage* PolyLangLanguage::get_singleton() { return singleton_; }
 // fail unless the current working directory happened to contain it.
 
 void PolyLangLanguage::_init() {
-    godot::String ext_path = "res://addons/polylang/";
-    godot::String global = godot::ProjectSettings::get_singleton()
-        ->globalize_path(ext_path + "adapters/");
+    auto* rm = RuntimeManager::get_singleton();
+    if (!rm) return;
 
-    // Step 1: set adapter dir first.
-    
+    auto* settings = godot::ProjectSettings::get_singleton();
+    godot::String addon_root = "res://addons/polylang/";
+    godot::String bin_root   = addon_root + "bin/";
+    godot::String platform_root = bin_root + platform_bin_dir();
+
+    rm->clear_adapter_search_roots();
+    if (settings) {
+        if (!platform_bin_dir().is_empty())
+            rm->add_adapter_search_root(settings->globalize_path(platform_root).utf8().get_data());
+        rm->add_adapter_search_root(settings->globalize_path(bin_root).utf8().get_data());
+        rm->add_adapter_search_root(settings->globalize_path(addon_root + "adapters/").utf8().get_data());
+    }
 
     // Step 2: now safe to start health monitor.
-    RuntimeManager::get_singleton()->start_health_monitor();
+    rm->start_health_monitor();
 }
 
 void PolyLangLanguage::_finish() {
@@ -139,6 +166,7 @@ godot::PackedStringArray PolyLangLanguage::_get_recognized_extensions() const {
         const char* dot = strchr(ext, '.');
         if (dot && *(dot+1)) arr.push_back(godot::String(dot + 1)); // "lua", "py" ...
     }
+    arr.push_back("poly");
     return arr;
 }
 

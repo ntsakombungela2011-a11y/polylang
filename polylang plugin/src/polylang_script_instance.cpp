@@ -26,6 +26,7 @@
 #include "variant_bridge.hpp"
 #include "pl_state_transfer.hpp"
 #include "pl_bridge.hpp"
+#include "pl_cross_inherit.hpp"
 
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -88,14 +89,14 @@ PolyLangScriptInstance::PolyLangScriptInstance(
 {
     if (script_ && PLScriptRegistry::get_singleton()) {
         std::string path = script_->get_path().utf8().get_data();
-        PLScriptRegistry::get_singleton()->register_instance(path, this);
+        PLScriptRegistry::get_singleton()->register_instance(path, owner_, this);
     }
 }
 
 PolyLangScriptInstance::~PolyLangScriptInstance() {
     if (script_ && PLScriptRegistry::get_singleton()) {
         std::string path = script_->get_path().utf8().get_data();
-        PLScriptRegistry::get_singleton()->unregister_instance(path, this);
+        PLScriptRegistry::get_singleton()->unregister_instance(path, owner_, this);
     }
     void* fi = foreign_instance_.exchange(nullptr, std::memory_order_acq_rel);
     if (fi && vtable_ && vtable_->pl_free_instance)
@@ -176,7 +177,28 @@ int PolyLangScriptInstance::call_method(const char* name,
 int PolyLangScriptInstance::call_method_direct(const char* name,
                                                 PLValue* args, int32_t argc,
                                                 PLValue* ret) {
-    return call_method(name, args, argc, ret);
+    int rc = call_method(name, args, argc, ret);
+    if (rc != PL_ERR_METHOD_NOT_FOUND || !script_ || !owner_ || !name || !*name)
+        return rc;
+    return PLCrossInherit::get_singleton()->try_base_call(
+        get_script_path(), owner_, name, args, argc, ret);
+}
+
+bool PolyLangScriptInstance::resolve_method_target(const char*,
+                                                    uint32_t capability_mask,
+                                                    PLAdapterVTable** out_vtable,
+                                                    void** out_foreign) const {
+    if (out_vtable)  *out_vtable = nullptr;
+    if (out_foreign) *out_foreign = nullptr;
+    if (!vtable_) return false;
+    if ((vtable_->capabilities & capability_mask) != capability_mask) return false;
+
+    std::shared_lock lk(instance_lock_);
+    void* fi = foreign_instance_.load(std::memory_order_acquire);
+    if (!fi) return false;
+    if (out_vtable)  *out_vtable = const_cast<PLAdapterVTable*>(vtable_);
+    if (out_foreign) *out_foreign = fi;
+    return true;
 }
 
 int PolyLangScriptInstance::get_property_direct(const char* name, PLValue* out) {
@@ -184,7 +206,11 @@ int PolyLangScriptInstance::get_property_direct(const char* name, PLValue* out) 
     std::shared_lock lk(instance_lock_);
     void* fi = foreign_instance_.load(std::memory_order_acquire);
     if (!fi) { pl_value_init(out); return PL_ERR_GENERIC; }
-    return vtable_->pl_get_property(fi, name, out);
+    int rc = vtable_->pl_get_property(fi, name, out);
+    if (rc == PL_OK || !script_ || !owner_ || !name || !*name) return rc;
+    lk.unlock();
+    return PLCrossInherit::get_singleton()->try_base_get(
+        get_script_path(), owner_, name, out);
 }
 
 int PolyLangScriptInstance::set_property_direct(const char* name, const PLValue* val) {
@@ -192,7 +218,11 @@ int PolyLangScriptInstance::set_property_direct(const char* name, const PLValue*
     std::shared_lock lk(instance_lock_);
     void* fi = foreign_instance_.load(std::memory_order_acquire);
     if (!fi) return PL_ERR_GENERIC;
-    return vtable_->pl_set_property(fi, name, val);
+    int rc = vtable_->pl_set_property(fi, name, val);
+    if (rc == PL_OK || !script_ || !owner_ || !name || !*name) return rc;
+    lk.unlock();
+    return PLCrossInherit::get_singleton()->try_base_set(
+        get_script_path(), owner_, name, val);
 }
 
 // ── Trampolines ───────────────────────────────────────────────
@@ -214,16 +244,13 @@ GDExtensionBool PolyLangScriptInstance::_set_trampoline(
         GDExtensionConstStringNamePtr    p_name,
         GDExtensionConstVariantPtr       p_value) {
     auto* inst = static_cast<PolyLangScriptInstance*>(p_ri);
-    if (!inst || !inst->vtable_ || !inst->vtable_->pl_set_property) return false;
+    if (!inst) return false;
     const godot::StringName& nm = *reinterpret_cast<const godot::StringName*>(p_name);
     const godot::Variant&    vr = *reinterpret_cast<const godot::Variant*>(p_value);
     PLValue pv; pl_value_init(&pv);
     VariantBridge::to_pl_value(vr, pv);
-    std::shared_lock lk(inst->instance_lock_);
-    void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
-    if (!fi) { VariantBridge::free_pl_value(pv); return false; }
     godot::String s_name = nm;
-    int r = inst->vtable_->pl_set_property(fi, s_name.utf8().get_data(), &pv);
+    int r = inst->set_property_direct(s_name.utf8().get_data(), &pv);
     VariantBridge::free_pl_value(pv);
     return (r == PL_OK) ? 1 : 0;
 }
@@ -233,15 +260,12 @@ GDExtensionBool PolyLangScriptInstance::_get_trampoline(
         GDExtensionConstStringNamePtr    p_name,
         GDExtensionVariantPtr            r_ret) {
     auto* inst = static_cast<PolyLangScriptInstance*>(p_ri);
-    if (!inst || !inst->vtable_ || !inst->vtable_->pl_get_property) return false;
+    if (!inst) return false;
     const godot::StringName& nm = *reinterpret_cast<const godot::StringName*>(p_name);
     godot::Variant& out = *reinterpret_cast<godot::Variant*>(r_ret);
     PLValue pv; pl_value_init(&pv);
-    std::shared_lock lk(inst->instance_lock_);
-    void* fi = inst->foreign_instance_.load(std::memory_order_acquire);
-    if (!fi) return false;
     godot::String s_name = nm;
-    int r = inst->vtable_->pl_get_property(fi, s_name.utf8().get_data(), &pv);
+    int r = inst->get_property_direct(s_name.utf8().get_data(), &pv);
     if (r != PL_OK) return false;
     out = VariantBridge::from_pl_value(pv);
     VariantBridge::free_pl_value(pv);
@@ -279,14 +303,14 @@ void PolyLangScriptInstance::_call_trampoline(
         {
             godot::String s_mname = method_sn;
             std::string mname = s_mname.utf8().get_data();
-            rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
+            rc = inst->call_method_direct(mname.c_str(), args_buf.data(), argc, &result);
         }
         }
     } else {
     {
         godot::String s_mname = method_sn;
         std::string mname = s_mname.utf8().get_data();
-        rc = inst->call_method(mname.c_str(), args_buf.data(), argc, &result);
+        rc = inst->call_method_direct(mname.c_str(), args_buf.data(), argc, &result);
     }
     }
     for (auto& pv : args_buf) VariantBridge::free_pl_value(pv);

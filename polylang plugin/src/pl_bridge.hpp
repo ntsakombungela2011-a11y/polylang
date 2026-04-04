@@ -38,6 +38,19 @@ namespace polylang {
 
 class PolyLangScript;
 class PolyLangScriptInstance;
+class PolyglotInstance;
+
+enum class PLScriptKind : uint8_t {
+    PolyLang,
+    Polyglot,
+};
+
+struct PLScriptHandle {
+    PLScriptKind kind{PLScriptKind::PolyLang};
+    void*        ptr{nullptr};
+
+    bool valid() const { return ptr != nullptr; }
+};
 
 // ── Script registry ───────────────────────────────────────────
 // Maintains a map of res:// path → live PolyLangScriptInstance*.
@@ -49,18 +62,31 @@ public:
     static void create();
     static void destroy();
 
-    void register_instance(const std::string& path, PolyLangScriptInstance* inst);
-    void unregister_instance(const std::string& path, PolyLangScriptInstance* inst);
+    void register_instance(const std::string& path,
+                           godot::Object* owner,
+                           PolyLangScriptInstance* inst);
+    void unregister_instance(const std::string& path,
+                             godot::Object* owner,
+                             PolyLangScriptInstance* inst);
+    void register_polyglot(const std::string& path,
+                           godot::Object* owner,
+                           PolyglotInstance* inst);
+    void unregister_polyglot(const std::string& path,
+                             godot::Object* owner,
+                             PolyglotInstance* inst);
 
     // Returns the first live instance for the given path, or nullptr.
     PolyLangScriptInstance* find_instance(const std::string& path) const;
 
     // Returns all live instances for the path (there may be multiple).
     std::vector<PolyLangScriptInstance*> find_all(const std::string& path) const;
+    PLScriptHandle find_handle(const std::string& path) const;
+    PLScriptHandle find_owner(godot::Object* owner) const;
 
 private:
-    mutable std::shared_mutex                                     mutex_;
-    std::unordered_map<std::string, std::vector<PolyLangScriptInstance*>> map_;
+    mutable std::shared_mutex                            mutex_;
+    std::unordered_map<std::string, std::vector<PLScriptHandle>> map_;
+    std::unordered_map<godot::Object*, PLScriptHandle>   owner_map_;
 
 public:
     static PLScriptRegistry* singleton_;

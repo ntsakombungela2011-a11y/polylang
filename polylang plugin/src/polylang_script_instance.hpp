@@ -64,6 +64,8 @@ public:
 
     // Public: used by PolyLangBridge for cross-language calls.
     int call_method_direct(const char* name, PLValue* args, int32_t argc, PLValue* ret);
+    bool resolve_method_target(const char* method_name, uint32_t capability_mask,
+                               PLAdapterVTable** out_vtable, void** out_foreign) const;
     const PLAdapterVTable* get_vtable() const { return vtable_; }
 
     // Helpers used by PLCrossInherit.

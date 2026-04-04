@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 #include <cstring>
 
 #include <godot_cpp/core/error_macros.hpp>
@@ -88,6 +89,15 @@ struct SandboxEntry {
     std::string tier_name;   // "isolated" | "quarantined" | "trusted"
 };
 
+struct RuntimeServiceBindings {
+    PLRuntimeServices generic{};
+    int      (*bridge_call)(const char* path, const char* method,
+                            PLValue* args, int32_t argc, PLValue* ret){nullptr};
+    uint64_t (*signal_connect_native)(const char* name,
+                            void (*cb)(PLValue*, int32_t, void*), void* ud){nullptr};
+    void     (*signal_disconnect_native)(uint64_t id){nullptr};
+};
+
 // ── Odin build mode ───────────────────────────────────────────
 // Controls how .pl.odin scripts are handled at compile time.
 enum class OdinBuildMode : uint8_t {
@@ -112,6 +122,13 @@ public:
     // Load adapter .so and call pl_init_runtime().
     // Returns false if load or init fails.
     bool load_adapter(LanguageID id, const char* so_path);
+
+    void clear_adapter_search_roots();
+    void add_adapter_search_root(const std::string& dir);
+    void set_adapter_dir(const std::string& dir);
+    const std::vector<std::string>& adapter_search_roots() const { return adapter_search_roots_; }
+
+    void set_service_bindings(const RuntimeServiceBindings& bindings);
 
     // Retrieve the vtable for a loaded adapter (null if not loaded).
     PLAdapterVTable* get_vtable(LanguageID id) const;
@@ -173,6 +190,9 @@ private:
 
     OdinBuildMode                      odin_build_mode_{OdinBuildMode::PreBuilt};
     std::string                        odin_cache_dir_;
+    std::vector<std::string>           adapter_search_roots_;
+    RuntimeServiceBindings             service_bindings_{};
+    bool                               service_bindings_set_{false};
 
     std::thread                        health_thread_;
     std::atomic<bool>                  health_running_{false};
@@ -184,7 +204,11 @@ private:
     void health_monitor_loop();
     bool parse_sidecar_file(const std::string& config_path,
                              std::string& out_tier,
-                             uint32_t&    out_caps);
+                             uint32_t&    out_caps,
+                             std::string* out_base_script = nullptr);
+    bool ensure_adapter_loaded(LanguageID id);
+    std::vector<std::string> adapter_candidate_paths(LanguageID id) const;
+    void inject_services_into_adapter(AdapterEntry& entry);
 };
 
 } // namespace polylang
