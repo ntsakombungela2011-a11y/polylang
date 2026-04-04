@@ -95,7 +95,8 @@ godot::Ref<godot::Script> PolyglotScript::_get_base_script() const {
     auto* loader = godot::ResourceLoader::get_singleton();
     if (!loader) return godot::Ref<godot::Script>();
     godot::Ref<godot::Resource> res = loader->load(godot::String(it->second.c_str()));
-    return godot::Ref<godot::Script>(res);
+    godot::Ref<godot::Script> script = res;
+    return script;
 }
 
 godot::StringName PolyglotScript::_get_global_name() const {

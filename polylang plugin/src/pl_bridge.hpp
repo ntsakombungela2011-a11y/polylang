@@ -19,6 +19,7 @@
 // =============================================================
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -53,8 +54,8 @@ struct PLScriptHandle {
 };
 
 // ── Script registry ───────────────────────────────────────────
-// Maintains a map of res:// path → live PolyLangScriptInstance*.
-// PolyLangScriptInstance registers/unregisters itself here.
+// Maintains a map of res:// path → live script instances.
+// Both PolyLangScriptInstance and PolyglotInstance register here.
 
 class PLScriptRegistry {
 public:
@@ -75,10 +76,10 @@ public:
                              godot::Object* owner,
                              PolyglotInstance* inst);
 
-    // Returns the first live instance for the given path, or nullptr.
+    // Returns the first live PolyLang instance for the given path, or nullptr.
     PolyLangScriptInstance* find_instance(const std::string& path) const;
 
-    // Returns all live instances for the path (there may be multiple).
+    // Returns all live PolyLang instances for the path (there may be multiple).
     std::vector<PolyLangScriptInstance*> find_all(const std::string& path) const;
     PLScriptHandle find_handle(const std::string& path) const;
     PLScriptHandle find_owner(godot::Object* owner) const;

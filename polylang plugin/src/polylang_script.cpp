@@ -60,9 +60,10 @@ PolyLangScript::~PolyLangScript() {
         compiled_handle_.store(nullptr, std::memory_order_release);
     }
 
-    if (pending_handle_ && vtable_ && vtable_->pl_free_compiled) {
-        vtable_->pl_free_compiled(pending_handle_);
-        pending_handle_ = nullptr;
+    void* pending = pending_handle_.load(std::memory_order_acquire);
+    if (pending && vtable_ && vtable_->pl_free_compiled) {
+        vtable_->pl_free_compiled(pending);
+        pending_handle_.store(nullptr, std::memory_order_release);
     }
 
     std::string path = get_path().utf8().get_data();
@@ -195,7 +196,7 @@ std::vector<PolyLangScriptInstance*> PolyLangScript::snapshot_instances() const 
 
 void PolyLangScript::apply_new_compiled_handle(void* new_handle) {
     compiled_handle_.store(new_handle, std::memory_order_release);
-    pending_handle_ = nullptr;
+    pending_handle_.store(nullptr, std::memory_order_release);
 }
 
 // ── ScriptExtension API ───────────────────────────────────────

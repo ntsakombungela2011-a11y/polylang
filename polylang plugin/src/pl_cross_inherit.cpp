@@ -166,6 +166,7 @@ int PLCrossInherit::get_on_base(const std::string& base_path,
                 return static_cast<PolyglotInstance*>(handle.ptr)
                     ->get_property_direct(prop, ret);
         }
+        return PL_ERR_GENERIC;
     }
 
     godot::Variant val = owner->get(godot::StringName(prop));
@@ -196,6 +197,7 @@ int PLCrossInherit::set_on_base(const std::string& base_path,
                 return static_cast<PolyglotInstance*>(handle.ptr)
                     ->set_property_direct(prop, val);
         }
+        return PL_ERR_GENERIC;
     }
 
     godot::Variant gv = VariantBridge::from_pl_value(*val);
