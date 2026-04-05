@@ -29,6 +29,7 @@
 #include "pl_cross_inherit.hpp"
 
 #include <godot_cpp/core/error_macros.hpp>
+#include <godot_cpp/core/gdextension_interface_loader.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 
@@ -361,7 +362,7 @@ GDExtensionScriptInstancePtr PolyLangScriptInstance::create_godot_instance(
     info.free_property_list_func = [](GDExtensionScriptInstanceDataPtr, const GDExtensionPropertyInfo*, uint32_t) {};
     info.get_method_list_func    = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionMethodInfo* { *r=0; return nullptr; };
     info.free_method_list_func   = [](GDExtensionScriptInstanceDataPtr, const GDExtensionMethodInfo*, uint32_t) {};
-    return godot::gdextension_interface::script_instance_create3(&info, inst);
+    return script_instance_create3(&info, inst);
 }
 
 } // namespace polylang

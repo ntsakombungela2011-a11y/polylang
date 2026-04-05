@@ -93,7 +93,7 @@ static uint64_t c_signal_connect_native(const char* signal_name,
     return bus->connect_native(
         sname,
         [callback, userdata](const godot::Array& arr) {
-            const int32_t n = std::min((int)arr.size(), 16);
+            const int32_t n = (std::min)((int)arr.size(), 16);
             PLValue pl_args[16];
             for (int32_t i = 0; i < n; ++i)
                 VariantBridge::to_pl_value(arr[i], pl_args[i]);
@@ -119,7 +119,7 @@ static void c_signal_connect(const char* signal_name,
     cookie.listener_id = bus->connect_native(sname,
         [callback, userdata](const godot::Array& arr) {
             // Convert Godot args to PLValues on-stack (max 16).
-            const int32_t n = std::min((int)arr.size(), 16);
+            const int32_t n = (std::min)((int)arr.size(), 16);
             PLValue pl_args[16];
             for (int32_t i = 0; i < n; ++i) {
                 const godot::Variant& v = arr[i];

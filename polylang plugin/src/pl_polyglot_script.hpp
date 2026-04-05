@@ -45,7 +45,9 @@
 #include <string>
 #include <vector>
 
+#include <godot_cpp/classes/script.hpp>
 #include <godot_cpp/classes/script_extension.hpp>
+#include <godot_cpp/classes/script_language.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>

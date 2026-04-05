@@ -25,6 +25,12 @@
 #include "../include/pl_adapter_vtable.h"
 
 #if defined(_WIN32)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
 #  define PL_DLOPEN(p)  (void*)LoadLibraryA(p)
 #  define PL_DLSYM(h,s) (void*)GetProcAddress((HMODULE)(h),(s))
