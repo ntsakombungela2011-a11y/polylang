@@ -164,8 +164,10 @@ jobs:
               echo "✓ ${SYM} found"
             else
               echo "⊘ ${SYM} not found (export check failed)"
+              MISSING=1
             fi
           done
+          if [ $MISSING -ne 0 ]; then exit 1; fi
 
       - name: Run sidecar config tests
         run: |
@@ -393,9 +395,9 @@ jobs:
         run: |
           if (Test-Path godot-cpp) { Remove-Item -Recurse -Force godot-cpp }
           if (Test-Path godot-cpp.zip) { Remove-Item -Force godot-cpp.zip }
-          Invoke-WebRequest -Uri "https://github.com/godotengine/godot-cpp/archive/$($env:GODOT_CPP_COMMIT).zip" -OutFile godot-cpp.zip
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot-cpp/archive/${{ env.GODOT_CPP_COMMIT }}.zip" -OutFile godot-cpp.zip
           Expand-Archive -Path godot-cpp.zip -DestinationPath .
-          Move-Item "godot-cpp-$($env:GODOT_CPP_COMMIT)" "godot-cpp"
+          Move-Item "godot-cpp-${{ env.GODOT_CPP_COMMIT }}" "godot-cpp"
         shell: pwsh
 
       # ZT-10: Remove any stale CMake cache/build dir before configure to prevent path errors
@@ -426,19 +428,20 @@ jobs:
       - name: Verify outputs
         shell: pwsh
         run: |
-          if (Test-Path build_win/Release/polylang.dll) {
+          if (Test-Path build_win/polylang.dll) {
             Write-Host "✓ polylang.dll exists"
           } else {
             Write-Host "⊘ polylang.dll not found - build may have failed"
+            exit 1
           }
 
       - name: Prepare artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path ../dist_win -Force | Out-Null
-          if (Test-Path build_win/Release/polylang.dll) {
-            Get-ChildItem build_win/Release -Filter *.dll | Copy-Item -Destination ../dist_win/ -Force
-            Get-ChildItem build_win/Release -Filter *.lib | Copy-Item -Destination ../dist_win/ -Force -ErrorAction SilentlyContinue
+          if (Test-Path build_win/polylang.dll) {
+            Get-ChildItem build_win -Filter *.dll | Copy-Item -Destination ../dist_win/ -Force
+            Get-ChildItem build_win -Filter *.lib | Copy-Item -Destination ../dist_win/ -Force -ErrorAction SilentlyContinue
             cd ../dist_win
             Get-FileHash *.dll -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.FileName)" } > SHA256SUMS.txt
             Get-ChildItem
