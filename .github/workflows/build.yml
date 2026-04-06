@@ -415,7 +415,7 @@ jobs:
       - name: CMake configure (MSVC)
         shell: pwsh
         run: |
-          cmake -B build_win `
+          cmake -G Ninja -B build_win `
             -DCMAKE_BUILD_TYPE=Release `
             -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF
@@ -443,7 +443,7 @@ jobs:
             Get-ChildItem build_win -Filter *.dll | Copy-Item -Destination ../dist_win/ -Force
             Get-ChildItem build_win -Filter *.lib | Copy-Item -Destination ../dist_win/ -Force -ErrorAction SilentlyContinue
             cd ../dist_win
-            Get-FileHash *.dll -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.FileName)" } > SHA256SUMS.txt
+            Get-FileHash *.dll -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($(Split-Path $_.Path -Leaf))" } > SHA256SUMS.txt
             Get-ChildItem
           } else {
             Write-Host "WARNING: No polylang.dll found to stage"
@@ -484,7 +484,15 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++
+          sudo apt-get install -y --no-install-recommends g++-12 file
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+      - name: Download godot-cpp source (required for adapter headers)
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/godotengine/godot-cpp/archive/${{ env.GODOT_CPP_COMMIT }}.tar.gz" -o godot-cpp.tar.gz
+          tar -xzf godot-cpp.tar.gz
+          mv godot-cpp-${{ env.GODOT_CPP_COMMIT }} godot-cpp
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -503,7 +511,7 @@ jobs:
             echo "⊘ Downloaded artifact doesn't appear to be a valid shared object - skipping test"
             exit 0
           fi
-          g++ -std=c++20 -I include \
+          g++ -std=c++20 -I include -I godot-cpp/include -I godot-cpp/gen/include \
               tests/odin_adapter_test.cpp \
               adapters/odin/polylang_odin_adapter.cpp \
               adapters/odin/polylang_odin_shim.c \
@@ -568,7 +576,15 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++
+          sudo apt-get install -y --no-install-recommends g++-12
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+      - name: Download godot-cpp source
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/godotengine/godot-cpp/archive/${{ env.GODOT_CPP_COMMIT }}.tar.gz" -o godot-cpp.tar.gz
+          tar -xzf godot-cpp.tar.gz
+          mv godot-cpp-${{ env.GODOT_CPP_COMMIT }} godot-cpp
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -590,7 +606,7 @@ jobs:
       - name: Build sandbox test binary
         run: |
           set -euo pipefail
-          g++ -std=c++20 -I include \
+          g++ -std=c++20 -I include -I godot-cpp/include -I godot-cpp/gen/include \
               tests/sandbox_escape_test.cpp \
               adapters/odin/polylang_odin_adapter.cpp \
               adapters/odin/polylang_odin_shim.c \
@@ -647,6 +663,7 @@ jobs:
             exit 0
           fi
           set -euo pipefail
+          rm -f /tmp/sandbox_escape_test_FILE
           mkdir -p /tmp/polylang_odin_cache
           ./sandbox_escape_tests || echo "Sandbox test completed with status: $?"
 
