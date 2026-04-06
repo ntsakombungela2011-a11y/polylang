@@ -92,7 +92,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build gcc-12 g++-12 \
+            cmake ninja-build gcc-12 g++-12 file \
             liblua5.4-dev python3-dev binutils
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
@@ -271,7 +271,7 @@ jobs:
       - name: Install build tools
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
+          sudo apt-get update -qq && sudo apt-get install -y file
           sudo apt-get install -y --no-install-recommends cmake ninja-build
 
       - name: CMake configure (Android)
@@ -393,9 +393,9 @@ jobs:
         run: |
           if (Test-Path godot-cpp) { Remove-Item -Recurse -Force godot-cpp }
           if (Test-Path godot-cpp.zip) { Remove-Item -Force godot-cpp.zip }
-          Invoke-WebRequest -Uri "https://github.com/godotengine/godot-cpp/archive/${env:GODOT_CPP_COMMIT}.zip" -OutFile godot-cpp.zip
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot-cpp/archive/$($env:GODOT_CPP_COMMIT).zip" -OutFile godot-cpp.zip
           Expand-Archive -Path godot-cpp.zip -DestinationPath .
-          Move-Item "godot-cpp-$env:GODOT_CPP_COMMIT" "godot-cpp"
+          Move-Item "godot-cpp-$($env:GODOT_CPP_COMMIT)" "godot-cpp"
         shell: pwsh
 
       # ZT-10: Remove any stale CMake cache/build dir before configure to prevent path errors
@@ -413,7 +413,6 @@ jobs:
       - name: CMake configure (MSVC)
         shell: pwsh
         run: |
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           cmake -B build_win `
             -DCMAKE_BUILD_TYPE=Release `
             -DPOLYLANG_BUILD_ODIN_ADAPTER=OFF `
@@ -422,7 +421,6 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           cmake --build build_win --config Release -j4
 
       - name: Verify outputs
@@ -550,7 +548,7 @@ jobs:
         run: |
           set -uo pipefail
           ODIN_VERSION="dev-2024-05"
-          ODIN_URL="https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.tar.gz"
+          ODIN_URL="https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-linux-amd64-${ODIN_VERSION}.tar.gz"
           EXPECTED_HASH="8bfa62d459f505609cd0343746b4116f3e6866eb2d5b4b91bb8365db72f04e47"
           
           curl -fsSL "$ODIN_URL" -o odin.tar.gz
