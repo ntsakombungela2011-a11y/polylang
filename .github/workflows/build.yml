@@ -67,7 +67,7 @@ jobs:
           mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/linux
           cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           cp "${{ env.PLUGIN_DIR }}/build_linux/polylang.so" pkg/addons/${{ env.ADDON_NAME }}/bin/linux/ 2>/dev/null || true
-          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ ';' 2>/dev/null || true
+          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           zip -r polylang-linux.zip pkg/
 
@@ -194,11 +194,7 @@ jobs:
   package-android:
     needs: build-android
     runs-on: ubuntu-24.04
-    steps:
-      - name: 📥 Checkout (for plugin.cfg + scripts)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+    steps:      - name: 📥 Checkout (for plugin.cfg + scripts)
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -213,7 +209,7 @@ jobs:
           mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/android
           
           cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
-          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ ';' 2>/dev/null || true
+          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do
@@ -247,7 +243,6 @@ jobs:
 
       - name: 📦 Attach to GitHub Release
         uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*.zip
+        with:          files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
