@@ -194,7 +194,11 @@ jobs:
   package-android:
     needs: build-android
     runs-on: ubuntu-24.04
-    steps:      - name: 📥 Checkout (for plugin.cfg + scripts)
+    steps:
+      - name: 📥 Checkout (for plugin.cfg + scripts)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
