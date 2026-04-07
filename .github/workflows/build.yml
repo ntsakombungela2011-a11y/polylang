@@ -1,4 +1,4 @@
-name: 🧩 Build PolyLang GDExtension (Godot 4.6+)
+name: Build PolyLang (Godot 4.6+)
 
 on:
   push:
@@ -8,241 +8,88 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      platforms:
-        description: 'Platforms: linux,windows,android (comma-separated)'
-        required: false
-        default: 'linux,windows,android'
 
 env:
   PLUGIN_DIR: "polylang plugin"
   ADDON_NAME: "polylang"
-  GODOT_CPP_BRANCH: "master"
   NDK_VERSION: "27.0.12077973"
-  ANDROID_API_LEVEL: "23"
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # LINUX (Godot 4.6+)
-  # ─────────────────────────────────────────────────────────────
-  build-linux:
-    if: contains(github.event.inputs.platforms || 'linux,windows,android', 'linux')
-    runs-on: ubuntu-24.04
-    steps:
-      - name: 📥 Checkout + Sync godot-cpp
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: 🔄 Ensure godot-cpp tracks 4.6+
-        run: |
-          cd "${{ env.PLUGIN_DIR }}/godot-cpp"
-          git fetch origin
-          git checkout ${{ env.GODOT_CPP_BRANCH }} || git checkout master
-          git pull origin ${{ env.GODOT_CPP_BRANCH }} || true
-
-      - name: 🐧 Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config \
-            libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
-            libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \            libwayland-dev libxkbcommon-dev
-
-      - name: 🔨 Configure CMake
-        run: |
-          mkdir -p "${{ env.PLUGIN_DIR }}/build_linux"
-          cd "${{ env.PLUGIN_DIR }}/build_linux"
-          cmake .. -DCMAKE_BUILD_TYPE=Release \
-            -DPL_ENABLE_HARDENING=OFF \
-            -DPOLYLANG_BUILD_TESTS=OFF
-
-      - name: ⚙️ Build
-        run: |
-          cd "${{ env.PLUGIN_DIR }}/build_linux"
-          cmake --build . --config Release --parallel 4
-
-      - name: 📦 Package
-        run: |
-          mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/linux
-          cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
-          cp "${{ env.PLUGIN_DIR }}/build_linux/polylang.so" pkg/addons/${{ env.ADDON_NAME }}/bin/linux/ 2>/dev/null || true
-          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
-          cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
-          zip -r polylang-linux.zip pkg/
-
-      - name: 📤 Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: polylang-linux
-          path: polylang-linux.zip
-          retention-days: 30
-
-  # ─────────────────────────────────────────────────────────────
-  # WINDOWS (Godot 4.6+)
-  # ─────────────────────────────────────────────────────────────
-  build-windows:
-    if: contains(github.event.inputs.platforms || 'linux,windows,android', 'windows')
-    runs-on: windows-2022
-    steps:
-      - name: 📥 Checkout + Sync godot-cpp
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: 🔄 Ensure godot-cpp tracks 4.6+
-        run: |
-          cd "${{ env.PLUGIN_DIR }}/godot-cpp"
-          git fetch origin
-          git checkout ${{ env.GODOT_CPP_BRANCH }} || git checkout master
-          git pull origin ${{ env.GODOT_CPP_BRANCH }} || true
-      - name: 🪟 Install CMake
-        run: choco install cmake -y
-
-      - name: 🔨 Configure CMake
-        run: |
-          mkdir -p "${{ env.PLUGIN_DIR }}/build_windows"
-          cd "${{ env.PLUGIN_DIR }}/build_windows"
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release `
-            -DPL_ENABLE_HARDENING=OFF `
-            -DPOLYLANG_BUILD_TESTS=OFF
-
-      - name: ⚙️ Build
-        run: |
-          cd "${{ env.PLUGIN_DIR }}/build_windows"
-          cmake --build . --config Release --parallel 4
-
-      - name: 📦 Package
-        run: |
-          mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/windows
-          Copy-Item "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/" -ErrorAction SilentlyContinue
-          Copy-Item "${{ env.PLUGIN_DIR }}/build_windows/Release/polylang.dll" pkg/addons/${{ env.ADDON_NAME }}/bin/windows/ -ErrorAction SilentlyContinue
-          Copy-Item "${{ env.PLUGIN_DIR }}/build_windows/polylang.dll" pkg/addons/${{ env.ADDON_NAME }}/bin/windows/ -ErrorAction SilentlyContinue
-          Get-ChildItem -Path "${{ env.PLUGIN_DIR }}" -Filter "*.gdextension" -Recurse | Copy-Item -Destination "pkg/addons/${{ env.ADDON_NAME }}/" -ErrorAction SilentlyContinue
-          Copy-Item -Path "${{ env.PLUGIN_DIR }}/addons/polylang/*" -Destination "pkg/addons/${{ env.ADDON_NAME }}/" -Recurse -ErrorAction SilentlyContinue
-          Compress-Archive -Path pkg -DestinationPath polylang-windows.zip
-
-      - name: 📤 Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: polylang-windows
-          path: polylang-windows.zip
-          retention-days: 30
-
-  # ─────────────────────────────────────────────────────────────
-  # ANDROID (Godot 4.6+ | All ABIs)
-  # ─────────────────────────────────────────────────────────────
-  build-android:
-    if: contains(github.event.inputs.platforms || 'linux,windows,android', 'android')
-    runs-on: ubuntu-24.04
+  build:
     strategy:
       matrix:
-        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            ext: .so
+            build_dir: build_linux
+          - os: windows-2022
+            platform: windows
+            ext: .dll
+            build_dir: build_windows/Release
+          - os: ubuntu-24.04
+            platform: android
+            ext: .so
+            build_dir: build_android
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: 📥 Checkout + Sync godot-cpp
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
-      - name: 🔄 Ensure godot-cpp tracks 4.6+
-        run: |
-          cd "${{ env.PLUGIN_DIR }}/godot-cpp"
-          git fetch origin
-          git checkout ${{ env.GODOT_CPP_BRANCH }} || git checkout master
-          git pull origin ${{ env.GODOT_CPP_BRANCH }} || true
 
-      - name: 📦 Setup Android NDK r27+
+      - name: Setup Linux Deps
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev libwayland-dev libxkbcommon-dev
+
+      - name: Setup Android NDK
+        if: matrix.platform == 'android'
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: ${{ env.NDK_VERSION }}
           add-to-path: true
-          local-cache: true
 
-      - name: 🔨 Configure CMake for Android
+      - name: Install CMake (Windows)
+        if: matrix.platform == 'windows'
+        run: choco install cmake -y
+
+      - name: Configure
         run: |
-          mkdir -p "${{ env.PLUGIN_DIR }}/build_android_${{ matrix.abi }}"
-          cd "${{ env.PLUGIN_DIR }}/build_android_${{ matrix.abi }}"
-          cmake .. \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=${{ matrix.abi }} \
-            -DANDROID_PLATFORM=android-${{ env.ANDROID_API_LEVEL }} \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DPL_ENABLE_HARDENING=OFF \
-            -DPOLYLANG_BUILD_TESTS=OFF
+          mkdir -p "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}"
+          cd "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}"
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            cmake .. -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_BUILD_TYPE=Release -DPL_ENABLE_HARDENING=OFF -DPOLYLANG_BUILD_TESTS=OFF
+          else
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DPL_ENABLE_HARDENING=OFF -DPOLYLANG_BUILD_TESTS=OFF
+          fi
 
-      - name: ⚙️ Build
+      - name: Build
+        run: cd "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" && cmake --build . --config Release --parallel 4
+
+      - name: Package
         run: |
-          cd "${{ env.PLUGIN_DIR }}/build_android_${{ matrix.abi }}"
-          cmake --build . --config Release --parallel 4
-
-      - name: 📦 Stage ABI Library
-        run: |
-          mkdir -p android_staged/${{ matrix.abi }}
-          cp "${{ env.PLUGIN_DIR }}/build_android_${{ matrix.abi }}/polylang.so" android_staged/${{ matrix.abi }}/
-
-      - name: 📤 Upload ABI Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: polylang-android-${{ matrix.abi }}
-          path: android_staged/
-          retention-days: 30
-
-  # ─────────────────────────────────────────────────────────────
-  # ANDROID: Merge ABIs + Final Package
-  # ─────────────────────────────────────────────────────────────
-  package-android:
-    needs: build-android
-    runs-on: ubuntu-24.04
-    steps:      - name: 📥 Checkout (for plugin.cfg + scripts)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: 📥 Download All ABI Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: android_abis/
-
-      - name: 📦 Package Android Addon
-        run: |
-          mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/android
-          
+          mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/${{ matrix.platform }}
           cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
+          cp "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}/polylang${{ matrix.ext }}" pkg/addons/${{ env.ADDON_NAME }}/bin/${{ matrix.platform }}/${{ env.ADDON_NAME }}${{ matrix.ext }} 2>/dev/null || true
           find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
-          
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
-            mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/android/$abi
-            cp android_abis/polylang-android-$abi/$abi/polylang.so pkg/addons/${{ env.ADDON_NAME }}/bin/android/$abi/ 2>/dev/null || true
-          done
-          
-          zip -r polylang-android.zip pkg/
+          zip -r polylang-${{ matrix.platform }}.zip pkg/
 
-      - name: 📤 Upload Final Android Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: polylang-android
-          path: polylang-android.zip
+          name: polylang-${{ matrix.platform }}
+          path: polylang-${{ matrix.platform }}.zip
           retention-days: 30
 
-  # ─────────────────────────────────────────────────────────────
-  # RELEASE: Attach Artifacts to GitHub Release
-  # ─────────────────────────────────────────────────────────────
   release:
-    needs: [build-linux, build-windows, package-android]
+    needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: 📥 Download All Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts/
-
-      - name: 📦 Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:          files: artifacts/**/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
