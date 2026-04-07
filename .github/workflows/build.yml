@@ -67,7 +67,7 @@ jobs:
           mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/linux
           cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           cp "${{ env.PLUGIN_DIR }}/build_linux/polylang.so" pkg/addons/${{ env.ADDON_NAME }}/bin/linux/ 2>/dev/null || true
-          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
+          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ ';' 2>/dev/null || true
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           zip -r polylang-linux.zip pkg/
 
@@ -209,7 +209,7 @@ jobs:
           mkdir -p pkg/addons/${{ env.ADDON_NAME }}/bin/android
           
           cp "${{ env.PLUGIN_DIR }}/addons/polylang/plugin.cfg" pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
-          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ \; 2>/dev/null || true
+          find "${{ env.PLUGIN_DIR }}" -name "*.gdextension" -exec cp {} pkg/addons/${{ env.ADDON_NAME }}/ ';' 2>/dev/null || true
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/${{ env.ADDON_NAME }}/ 2>/dev/null || true
           
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do
