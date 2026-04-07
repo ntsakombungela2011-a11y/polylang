@@ -247,6 +247,7 @@ jobs:
 
       - name: 📦 Attach to GitHub Release
         uses: softprops/action-gh-release@v2
-        with:          files: artifacts/**/*.zip
+        with:
+          files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
