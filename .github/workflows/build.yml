@@ -17,9 +17,7 @@ on:
 env:
   PLUGIN_DIR: "polylang plugin"
   ADDON_NAME: "polylang"
-  # godot-cpp branch for 4.6+ compatibility
   GODOT_CPP_BRANCH: "master"
-  # Android requirements for Godot 4.6+
   NDK_VERSION: "27.0.12077973"
   ANDROID_API_LEVEL: "23"
 
@@ -47,9 +45,9 @@ jobs:
       - name: 🐧 Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config \            libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
-            libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \
-            libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y build-essential cmake pkg-config \
+            libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \            libwayland-dev libxkbcommon-dev
 
       - name: 🔨 Configure CMake
         run: |
@@ -96,9 +94,9 @@ jobs:
       - name: 🔄 Ensure godot-cpp tracks 4.6+
         run: |
           cd "${{ env.PLUGIN_DIR }}/godot-cpp"
-          git fetch origin          git checkout ${{ env.GODOT_CPP_BRANCH }} || git checkout master
+          git fetch origin
+          git checkout ${{ env.GODOT_CPP_BRANCH }} || git checkout master
           git pull origin ${{ env.GODOT_CPP_BRANCH }} || true
-
       - name: 🪟 Install CMake
         run: choco install cmake -y
 
@@ -145,8 +143,8 @@ jobs:
       - name: 📥 Checkout + Sync godot-cpp
         uses: actions/checkout@v4
         with:
-          submodules: recursive          fetch-depth: 0
-
+          submodules: recursive
+          fetch-depth: 0
       - name: 🔄 Ensure godot-cpp tracks 4.6+
         run: |
           cd "${{ env.PLUGIN_DIR }}/godot-cpp"
@@ -194,9 +192,9 @@ jobs:
   # ANDROID: Merge ABIs + Final Package
   # ─────────────────────────────────────────────────────────────
   package-android:
-    needs: build-android    runs-on: ubuntu-24.04
-    steps:
-      - name: 📥 Checkout (for plugin.cfg + scripts)
+    needs: build-android
+    runs-on: ubuntu-24.04
+    steps:      - name: 📥 Checkout (for plugin.cfg + scripts)
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -204,9 +202,7 @@ jobs:
       - name: 📥 Download All ABI Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: polylang-android-*
           path: android_abis/
-          merge-multiple: false
 
       - name: 📦 Package Android Addon
         run: |
@@ -237,15 +233,16 @@ jobs:
     needs: [build-linux, build-windows, package-android]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 📥 Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          merge-multiple: true
+
       - name: 📦 Attach to GitHub Release
         uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*.zip
+        with:          files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
