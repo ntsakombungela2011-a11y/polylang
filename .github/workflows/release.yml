@@ -1,0 +1,191 @@
+name: PolyLang — Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v6.7.0) — only used for manual runs'
+        required: false
+
+# Assembles all three platform artifacts into a combined addon zip
+# and attaches everything to the GitHub release.
+
+jobs:
+  # ── Wait for the three platform builds to finish ────────────────────────
+  # When a release is published the build-*.yml files also trigger on
+  # `release: types: [published]`, so we just wait for their artifacts.
+  # On a manual workflow_dispatch we re-download whatever artifacts exist.
+
+  assemble:
+    name: Assemble & Publish Release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout (for version from CMakeLists)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            polylang plugin/CMakeLists.txt
+            polylang plugin/addons/polylang/polylang.gdextension
+            polylang plugin/addons/polylang/plugin.cfg
+          sparse-checkout-cone-mode: false
+
+      - name: Read version from CMakeLists.txt
+        id: ver
+        run: |
+          V=$(grep -m1 'project(polylang VERSION' "polylang plugin/CMakeLists.txt" \
+              | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          V="${V:-${{ inputs.version }}}"
+          V="${V:-unknown}"
+          echo "version=${V}" >> $GITHUB_OUTPUT
+          echo "Detected version: ${V}"
+
+      # ── Download platform artifacts ─────────────────────────────────────
+      # These are uploaded by build-linux.yml / build-android.yml / build-windows.yml
+      # which all trigger on the same `release: published` event.
+      # We wait up to 30 minutes for them to appear.
+
+      - name: Wait for Linux artifact
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const name  = 'polylang-linux';
+            const runId = context.runId;
+            const deadline = Date.now() + 30 * 60 * 1000;  // 30 min
+
+            while (Date.now() < deadline) {
+              const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
+                owner, repo, name, per_page: 5
+              });
+              if (artifacts.artifacts.length > 0) {
+                console.log(`Found artifact: ${artifacts.artifacts[0].name}`);
+                return;
+              }
+              console.log('Waiting for polylang-linux…');
+              await new Promise(r => setTimeout(r, 30000));
+            }
+            core.setFailed('Timed out waiting for polylang-linux artifact');
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux
+          path: artifacts/linux/
+        continue-on-error: true
+
+      - name: Download Android build
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-android
+          path: artifacts/android/
+        continue-on-error: true
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-windows
+          path: artifacts/windows/
+        continue-on-error: true
+
+      # ── Unpack & assemble combined addon zip ─────────────────────────────
+      - name: Assemble combined addon
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          COMBINED="polylang_v${VERSION}_all_platforms"
+          mkdir -p "$COMBINED"
+
+          # Unpack each platform zip into the combined tree
+          for platform in linux android windows; do
+            ZIP="artifacts/${platform}/polylang-${platform}.zip"
+            if [ -f "$ZIP" ]; then
+              unzip -q "$ZIP" -d "$COMBINED"
+              echo "✅ Merged ${platform}"
+            else
+              echo "⚠️  Missing ${platform} artifact — skipped"
+            fi
+          done
+
+          # Rename per-platform zips for individual download
+          mv artifacts/linux/polylang-linux.zip       "polylang_v${VERSION}_linux.zip"       2>/dev/null || true
+          mv artifacts/android/polylang-android.zip   "polylang_v${VERSION}_android.zip"     2>/dev/null || true
+          mv artifacts/windows/polylang-windows.zip   "polylang_v${VERSION}_windows.zip"     2>/dev/null || true
+
+          # Build combined zip
+          zip -r "${COMBINED}.zip" "$COMBINED/"
+
+          # Checksums
+          sha256sum \
+            "polylang_v${VERSION}_linux.zip"   \
+            "polylang_v${VERSION}_android.zip" \
+            "polylang_v${VERSION}_windows.zip" \
+            "${COMBINED}.zip" \
+            > "polylang_v${VERSION}_SHA256SUMS.txt" 2>/dev/null || true
+
+          echo "=== Release files ==="
+          ls -lh polylang_v*.zip polylang_v*_SHA256SUMS.txt 2>/dev/null || true
+
+      # ── Release notes body ───────────────────────────────────────────────
+      - name: Build release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+
+          LINUX_STATUS="❌ missing"
+          ANDROID_STATUS="❌ missing"
+          WINDOWS_STATUS="❌ missing"
+          [ -f "polylang_v${VERSION}_linux.zip"   ] && LINUX_STATUS="✅"
+          [ -f "polylang_v${VERSION}_android.zip" ] && ANDROID_STATUS="✅"
+          [ -f "polylang_v${VERSION}_windows.zip" ] && WINDOWS_STATUS="✅"
+
+          cat > release_body.md <<EOF
+          ## PolyLang v${VERSION}
+
+          ### Platform builds
+          | Platform | Status |
+          |----------|--------|
+          | Linux x86_64 | ${LINUX_STATUS} |
+          | Android arm64-v8a | ${ANDROID_STATUS} |
+          | Windows x86_64 | ${WINDOWS_STATUS} |
+
+          ### Downloads
+          - **All platforms combined** — \`polylang_v${VERSION}_all_platforms.zip\`
+          - **Linux only** — \`polylang_v${VERSION}_linux.zip\`
+          - **Android only** — \`polylang_v${VERSION}_android.zip\`
+          - **Windows only** — \`polylang_v${VERSION}_windows.zip\`
+
+          ### Installation
+          Extract into your Godot 4.x project root so you get:
+          \`\`\`
+          res://addons/polylang/
+          \`\`\`
+          Then enable **PolyLang** in *Project → Project Settings → Plugins*.
+
+          ### Language adapters included
+          Lua · Python · JavaScript · TypeScript · Squirrel · Wren · AngelScript ·
+          Rust · Zig · Go · Nim · Haxe · Kotlin · C# · Odin · Julia · Swift
+
+          ### Checksums
+          See \`polylang_v${VERSION}_SHA256SUMS.txt\`.
+          EOF
+
+      # ── Attach to GitHub release ─────────────────────────────────────────
+      - name: Attach files to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          body_path: release_body.md
+          files: |
+            polylang_v${{ steps.ver.outputs.version }}_linux.zip
+            polylang_v${{ steps.ver.outputs.version }}_android.zip
+            polylang_v${{ steps.ver.outputs.version }}_windows.zip
+            polylang_v${{ steps.ver.outputs.version }}_all_platforms.zip
+            polylang_v${{ steps.ver.outputs.version }}_SHA256SUMS.txt
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

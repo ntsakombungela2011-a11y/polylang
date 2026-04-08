@@ -1,0 +1,210 @@
+name: PolyLang — Windows
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/CMakeLists.txt'
+      - 'vendor/**'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  PLUGIN_DIR:     "polylang plugin"
+  BUILD_DIR:      build_windows
+  VENDOR_INSTALL: ${{ github.workspace }}\vendor\install-windows
+
+jobs:
+  build:
+    name: Build Windows x86_64
+    runs-on: windows-2022
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # ── godot-cpp ─────────────────────────────────────────────────────────
+      - name: Detect godot-cpp branch
+        id: gcpp
+        run: |
+          $b = "4.3"
+          try {
+            $refs = git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD 2>$null
+            $line = ($refs | Where-Object { $_ -match "^ref:" })
+            if ($line) { $b = ($line -split "/")[-1].Trim() }
+          } catch {}
+          "branch=$b" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Cache godot-cpp
+        id: cache_gcpp
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
+          key: godot-cpp-windows-${{ steps.gcpp.outputs.branch }}-v1
+
+      - name: Fetch godot-cpp
+        if: steps.cache_gcpp.outputs.cache-hit != 'true'
+        run: |
+          $b    = "${{ steps.gcpp.outputs.branch }}"
+          $dest = "$env:PLUGIN_DIR\godot-cpp"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$b.zip"
+          Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
+          Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
+          $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
+          Get-ChildItem $inner.FullName | Move-Item -Destination $dest
+          Remove-Item _gcpp_tmp, godot-cpp.zip -Recurse -Force
+
+      # ── Vendored C deps (Lua, QuickJS, Wren, Squirrel, AngelScript) ───────
+      - name: Cache vendored deps (Windows)
+        id: cache_vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor\install-windows
+          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt') }}-v1
+
+      - name: Build vendored deps (Windows)
+        if: steps.cache_vendor.outputs.cache-hit != 'true'
+        run: |
+          cmake `
+            -S vendor `
+            -B vendor\build-windows `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL"
+          cmake --build vendor\build-windows --config Release --parallel
+          cmake --install vendor\build-windows --config Release
+
+      # ── Rust adapter ─────────────────────────────────────────────────────
+      - name: Cache Rust (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PLUGIN_DIR }}\adapters\rust\target
+            ~\.cargo\registry
+            ~\.cargo\git
+          key: rust-windows-${{ hashFiles('polylang plugin/adapters/rust/Cargo.toml', 'polylang plugin/adapters/rust/src/**') }}
+          restore-keys: rust-windows-
+
+      - name: Build Rust adapter (Windows)
+        working-directory: "${{ env.PLUGIN_DIR }}\\adapters\\rust"
+        run: cargo build --release
+        continue-on-error: true
+
+      # ── Zig adapter ───────────────────────────────────────────────────────
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+        continue-on-error: true
+
+      - name: Build Zig adapter (Windows)
+        working-directory: "${{ env.PLUGIN_DIR }}\\adapters\\zig"
+        run: zig build -Doptimize=ReleaseSafe
+        continue-on-error: true
+
+      # ── Go adapter ────────────────────────────────────────────────────────
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+        continue-on-error: true
+
+      - name: Build Go adapter (Windows)
+        working-directory: "${{ env.PLUGIN_DIR }}\\adapters\\go"
+        run: go build -buildmode=c-shared -o polylang_go_adapter.dll ./polylang_go_adapter.go
+        continue-on-error: true
+
+      # ── Java (Kotlin adapter) ─────────────────────────────────────────────
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+        continue-on-error: true
+
+      # ── Python (Python adapter headers) ───────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+        continue-on-error: true
+
+      # ── CMake configure ───────────────────────────────────────────────────
+      - name: Cache CMake build (Windows)
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}\\${{ env.BUILD_DIR }}"
+          key: cmake-windows-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v1
+          restore-keys: cmake-windows-
+
+      - name: Configure (Windows x64)
+        run: |
+          $s = "$env:PLUGIN_DIR"
+          $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          New-Item -ItemType Directory -Force -Path $b | Out-Null
+          cmake `
+            -S $s `
+            -B $b `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
+            -DPL_ENABLE_HARDENING=OFF `
+            -DPOLYLANG_BUILD_TESTS=OFF `
+            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
+
+      - name: Build (Windows x64)
+        run: cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel
+
+      # ── Package ───────────────────────────────────────────────────────────
+      - name: Package
+        run: |
+          New-Item -ItemType Directory -Force -Path pkg\addons\polylang\bin\windows | Out-Null
+
+          # Core DLL
+          $core = Get-ChildItem "$env:PLUGIN_DIR\$env:BUILD_DIR" -Recurse -Filter "polylang.dll" |
+                    Select-Object -First 1
+          if ($core) { Copy-Item $core.FullName pkg\addons\polylang\bin\windows\ }
+          else        { Write-Warning "polylang.dll not found" }
+
+          # Adapter DLLs
+          Get-ChildItem "$env:PLUGIN_DIR\$env:BUILD_DIR" -Recurse -Filter "*.dll" |
+            Where-Object { $_.Name -ne "polylang.dll" } |
+            ForEach-Object { Copy-Item $_.FullName pkg\addons\polylang\bin\windows\ }
+
+          # Pre-built Rust/Go if they succeeded
+          $rd = "$env:PLUGIN_DIR\adapters\rust\target\release\polylang_adapter_rust.dll"
+          $gd = "$env:PLUGIN_DIR\adapters\go\polylang_go_adapter.dll"
+          if (Test-Path $rd) { Copy-Item $rd pkg\addons\polylang\bin\windows\ }
+          if (Test-Path $gd) { Copy-Item $gd pkg\addons\polylang\bin\windows\ }
+
+          # GDScript plugin files
+          Copy-Item "$env:PLUGIN_DIR\addons\polylang\*" pkg\addons\polylang\ -Recurse -Force
+
+          Write-Host "=== Windows package contents ==="
+          Get-ChildItem pkg -Recurse | Select-Object FullName
+
+          Compress-Archive -Path pkg\* -DestinationPath polylang-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-windows
+          path: polylang-windows.zip
+          retention-days: 30

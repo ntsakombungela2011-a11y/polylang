@@ -1,0 +1,206 @@
+name: PolyLang — Android
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/CMakeLists.txt'
+      - 'vendor/**'
+      - '.github/workflows/build-android.yml'
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  PLUGIN_DIR:     "polylang plugin"
+  BUILD_DIR:      build_android
+  # CMakeLists.txt has a hard FATAL_ERROR below API 28 — do NOT lower this
+  ANDROID_API:    "28"
+  NDK_VERSION:    "27.0.12077973"
+  VENDOR_INSTALL: ${{ github.workspace }}/vendor/install-android
+
+jobs:
+  build:
+    name: Build Android arm64-v8a
+    runs-on: ubuntu-24.04
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # ── NDK ───────────────────────────────────────────────────────────────
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      # ── godot-cpp ─────────────────────────────────────────────────────────
+      - name: Detect godot-cpp branch
+        id: gcpp
+        run: |
+          B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+              | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+          echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp
+        id: cache_gcpp
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/godot-cpp"
+          key: godot-cpp-android-${{ steps.gcpp.outputs.branch }}-v1
+
+      - name: Fetch godot-cpp
+        if: steps.cache_gcpp.outputs.cache-hit != 'true'
+        run: |
+          B="${{ steps.gcpp.outputs.branch }}"
+          mkdir -p "$PLUGIN_DIR/godot-cpp"
+          curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
+
+      # ── Minimal tools ────────────────────────────────────────────────────
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build golang-go
+
+      # ── Vendored C deps — cross-compiled with NDK ─────────────────────────
+      # We pass the NDK toolchain to vendor/CMakeLists.txt so Lua, QuickJS,
+      # Wren, Squirrel, AngelScript are built as arm64-v8a .so files.
+      - name: Cache vendored deps (Android)
+        id: cache_vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor/install-android
+          key: vendor-android-arm64-${{ hashFiles('vendor/CMakeLists.txt') }}-ndk${{ env.NDK_VERSION }}-v1
+
+      - name: Build vendored deps (Android arm64)
+        if: steps.cache_vendor.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cmake \
+            -S vendor \
+            -B vendor/build-android \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${VENDOR_INSTALL}"
+          cmake --build vendor/build-android --parallel
+          cmake --install vendor/build-android
+
+      # ── Rust adapter (Android arm64) ──────────────────────────────────────
+      - name: Install Rust + Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+        continue-on-error: true
+
+      - name: Cache Rust (Android)
+        uses: actions/cache@v4
+        with:
+          path: |
+            polylang plugin/adapters/rust/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-android-arm64-${{ hashFiles('polylang plugin/adapters/rust/Cargo.toml', 'polylang plugin/adapters/rust/src/**') }}
+          restore-keys: rust-android-arm64-
+
+      - name: Build Rust adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/rust"
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ env.ANDROID_API }}-clang"
+        run: cargo build --release --target aarch64-linux-android
+        continue-on-error: true
+
+      # ── Zig adapter (Android arm64) ───────────────────────────────────────
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+        continue-on-error: true
+
+      - name: Build Zig adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/zig"
+        run: zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-linux-android -Dandroid_api=${{ env.ANDROID_API }}
+        continue-on-error: true
+
+      # ── Go adapter (Android arm64) ────────────────────────────────────────
+      - name: Build Go adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/go"
+        env:
+          GOOS:        android
+          GOARCH:      arm64
+          CGO_ENABLED: "1"
+          CC:          "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ env.ANDROID_API }}-clang"
+        run: go build -buildmode=c-shared -o polylang_go_adapter_android.so ./polylang_go_adapter.go
+        continue-on-error: true
+
+      # ── CMake configure ───────────────────────────────────────────────────
+      - name: Cache CMake build (Android)
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/${{ env.BUILD_DIR }}"
+          key: cmake-android-arm64-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v1
+          restore-keys: cmake-android-arm64-
+
+      - name: Configure (Android arm64)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p "$PLUGIN_DIR/$BUILD_DIR"
+          cmake \
+            -S "$PLUGIN_DIR" \
+            -B "$PLUGIN_DIR/$BUILD_DIR" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${VENDOR_INSTALL}" \
+            -DPL_ENABLE_HARDENING=OFF \
+            -DPOLYLANG_BUILD_TESTS=OFF \
+            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
+
+      - name: Build (Android arm64)
+        run: cmake --build "$PLUGIN_DIR/$BUILD_DIR" --config Release --parallel
+
+      # ── Package ───────────────────────────────────────────────────────────
+      - name: Package
+        run: |
+          mkdir -p pkg/addons/polylang/bin/android
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/android/ \;
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "*.so" ! -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/android/ \; 2>/dev/null || true
+
+          # Pre-built adapters if they succeeded
+          RUST="polylang plugin/adapters/rust/target/aarch64-linux-android/release/libpolylang_adapter_rust.so"
+          GO="polylang plugin/adapters/go/polylang_go_adapter_android.so"
+          [ -f "$RUST" ] && cp "$RUST" pkg/addons/polylang/bin/android/ || true
+          [ -f "$GO"   ] && cp "$GO"   pkg/addons/polylang/bin/android/ || true
+
+          cp -r "$PLUGIN_DIR/addons/polylang/"* pkg/addons/polylang/ 2>/dev/null || true
+          echo "=== Android package contents ==="
+          find pkg -type f | sort
+          zip -r polylang-android.zip pkg/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-android
+          path: polylang-android.zip
+          retention-days: 30
