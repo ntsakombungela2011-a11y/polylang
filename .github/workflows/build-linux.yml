@@ -1,0 +1,266 @@
+name: PolyLang — Linux Build
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'adapters/**'
+      - 'SConstruct'
+      - '.github/workflows/build-linux.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Enable verbose build output'
+        required: false
+        default: 'false'
+
+env:
+  GODOT_VERSION: "4.3"
+  TARGET_PLATFORM: linux
+  BUILD_ARCH: x86_64
+  SCONS_CACHE: ${{ github.workspace }}/.scons-cache
+
+jobs:
+  # ─────────────────────────────────────────────
+  # STAGE 1: Dependency setup & caching
+  # ─────────────────────────────────────────────
+  setup:
+    name: Setup Linux Build Environment
+    runs-on: ubuntu-22.04
+    outputs:
+      cache-hit: ${{ steps.cache-godot-cpp.outputs.cache-hit }}
+      godot-cpp-hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Compute godot-cpp hash
+        id: hash
+        run: echo "hash=$(git submodule status godot-cpp | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp build
+        id: cache-godot-cpp
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-linux-${{ steps.hash.outputs.hash }}
+          restore-keys: godot-cpp-linux-
+
+      - name: Cache SCons objects
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCONS_CACHE }}
+          key: scons-linux-${{ hashFiles('src/**', 'adapters/**', 'SConstruct') }}
+          restore-keys: scons-linux-
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            scons \
+            pkg-config \
+            libx11-dev \
+            libxcursor-dev \
+            libxinerama-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libxi-dev \
+            libxrandr-dev \
+            wget \
+            python3 \
+            python3-pip \
+            # Language runtimes for adapters
+            lua5.4 \
+            liblua5.4-dev \
+            ruby-dev \
+            libperl-dev \
+            tcl-dev \
+            guile-3.0-dev \
+            libwren-dev || true
+
+      - name: Install Python adapter deps
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install cffi || true
+
+      - name: Install Rust (for Rust adapter)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build godot-cpp (if not cached)
+        if: steps.cache-godot-cpp.outputs.cache-hit != 'true'
+        run: |
+          cd godot-cpp
+          scons platform=linux target=template_release arch=x86_64 -j$(nproc)
+
+  # ─────────────────────────────────────────────
+  # STAGE 2: Build each language adapter in parallel
+  # ─────────────────────────────────────────────
+  build-adapters:
+    name: Build Adapter — ${{ matrix.adapter }}
+    needs: setup
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false   # ← One adapter failing won't kill the rest
+      matrix:
+        adapter:
+          - lua
+          - python
+          - javascript
+          - ruby
+          - kotlin
+          - rust
+          - odin
+          - wren
+          - squirrel
+          - angelscript
+          - haxe
+          - nim
+          - crystal
+          - zig
+          - janet
+          - tcl
+          - guile
+
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-linux-${{ needs.setup.outputs.godot-cpp-hash }}
+
+      - name: Restore SCons cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCONS_CACHE }}
+          key: scons-linux-${{ hashFiles('src/**', 'adapters/**', 'SConstruct') }}
+          restore-keys: scons-linux-
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential scons python3
+
+      - name: Install adapter-specific deps
+        run: |
+          case "${{ matrix.adapter }}" in
+            lua)        sudo apt-get install -y liblua5.4-dev ;;
+            python)     sudo apt-get install -y python3-dev libpython3-dev ;;
+            ruby)       sudo apt-get install -y ruby-dev ;;
+            rust)       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; source $HOME/.cargo/env ;;
+            tcl)        sudo apt-get install -y tcl-dev ;;
+            guile)      sudo apt-get install -y guile-3.0-dev ;;
+            javascript) sudo apt-get install -y libv8-dev || true ;;
+            nim)        sudo apt-get install -y nim || true ;;
+            crystal)    sudo apt-get install -y crystal || true ;;
+            zig)        sudo snap install zig --classic --beta || true ;;
+          esac
+
+      - name: Build adapter
+        run: |
+          scons platform=linux target=template_release arch=x86_64 \
+            adapter=${{ matrix.adapter }} \
+            scons_cache=${{ env.SCONS_CACHE }} \
+            ${{ inputs.debug_mode == 'true' && 'verbose=yes' || '' }} \
+            -j$(nproc)
+
+      - name: Upload adapter artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-adapter-${{ matrix.adapter }}
+          path: |
+            bin/linux/**/*${{ matrix.adapter }}*
+            addons/polylang/bin/linux/**/*${{ matrix.adapter }}*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # STAGE 3: Link all adapters into final GDExtension
+  # ─────────────────────────────────────────────
+  link:
+    name: Link Linux GDExtension
+    needs: build-adapters
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download all adapter artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: linux-adapter-*
+          merge-multiple: true
+          path: bin/linux/
+
+      - name: Install build tools
+        run: sudo apt-get install -y --no-install-recommends build-essential scons
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-linux-${{ needs.setup.outputs.godot-cpp-hash }}
+
+      - name: Link final .so
+        run: |
+          scons platform=linux target=template_release arch=x86_64 \
+            link_only=yes -j$(nproc)
+
+      - name: Verify output
+        run: |
+          echo "=== Linux Build Output ==="
+          find bin/linux addons/polylang/bin/linux -name "*.so" 2>/dev/null || \
+            find . -name "libpolylang*.so" 2>/dev/null
+          echo "=========================="
+
+      - name: Upload final Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: |
+            bin/linux/
+            addons/polylang/bin/linux/
+            addons/polylang/*.gdextension
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # STAGE 4: Smoke test (optional, non-blocking)
+  # ─────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test
+    needs: link
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux-x86_64
+          path: artifact/
+
+      - name: Check .so symbols
+        run: |
+          SO=$(find artifact -name "*.so" | head -1)
+          if [ -n "$SO" ]; then
+            echo "Checking: $SO"
+            nm -D "$SO" | grep -E "polylang|PolyLang|ScriptLanguage" | head -20
+          else
+            echo "No .so found — skipping symbol check"
+          fi

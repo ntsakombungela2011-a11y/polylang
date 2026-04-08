@@ -1,0 +1,329 @@
+name: PolyLang — Windows Build
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'adapters/**'
+      - 'SConstruct'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Enable verbose build output'
+        required: false
+        default: 'false'
+
+env:
+  GODOT_VERSION: "4.3"
+  TARGET_PLATFORM: windows
+  BUILD_ARCH: x86_64
+  SCONS_CACHE: ${{ github.workspace }}\.scons-cache
+
+jobs:
+  # ─────────────────────────────────────────────
+  # STAGE 1: Environment & godot-cpp cache
+  # ─────────────────────────────────────────────
+  setup:
+    name: Setup Windows Build Environment
+    runs-on: windows-latest
+    outputs:
+      godot-cpp-hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Compute godot-cpp hash
+        id: hash
+        shell: bash
+        run: echo "hash=$(git submodule status godot-cpp | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp Windows build
+        id: cache-godot-cpp
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp\bin
+          key: godot-cpp-windows-${{ steps.hash.outputs.hash }}
+          restore-keys: godot-cpp-windows-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SCons
+        run: pip install scons
+
+      - name: Setup MSVC (Visual Studio)
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build godot-cpp for Windows
+        if: steps.cache-godot-cpp.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          cd godot-cpp
+          scons platform=windows target=template_release arch=x86_64 -j%NUMBER_OF_PROCESSORS%
+
+  # ─────────────────────────────────────────────
+  # STAGE 2: Per-adapter builds (parallel)
+  # ─────────────────────────────────────────────
+  build-adapters:
+    name: Windows — ${{ matrix.adapter }}
+    needs: setup
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false   # ← Critical: keep building even if one adapter fails
+      matrix:
+        adapter:
+          - lua
+          - python
+          - javascript
+          - ruby
+          - kotlin
+          - rust
+          - odin
+          - wren
+          - squirrel
+          - angelscript
+          - haxe
+          - nim
+          - crystal
+          - zig
+          - janet
+          - tcl
+          - guile
+
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp\bin
+          key: godot-cpp-windows-${{ needs.setup.outputs.godot-cpp-hash }}
+
+      - name: Restore SCons cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCONS_CACHE }}
+          key: scons-windows-${{ matrix.adapter }}-${{ hashFiles('src/**', 'adapters/**', 'SConstruct') }}
+          restore-keys: scons-windows-${{ matrix.adapter }}-
+
+      - name: Setup Python + SCons
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SCons
+        run: pip install scons
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      # ── Adapter-specific dependency installs ──
+
+      - name: Install Lua (Windows)
+        if: matrix.adapter == 'lua'
+        shell: pwsh
+        run: |
+          choco install lua --no-progress -y
+          # Also try vcpkg for dev headers
+          vcpkg install lua:x64-windows || true
+
+      - name: Install Python dev headers
+        if: matrix.adapter == 'python'
+        shell: pwsh
+        run: |
+          # Python is already installed via setup-python; dev headers are bundled
+          python -c "import sys; print(sys.prefix)"
+
+      - name: Install Ruby (Windows)
+        if: matrix.adapter == 'ruby'
+        shell: pwsh
+        run: choco install ruby --no-progress -y
+
+      - name: Install Rust (Windows)
+        if: matrix.adapter == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Odin (Windows)
+        if: matrix.adapter == 'odin'
+        shell: pwsh
+        run: |
+          # Odin releases ship as a zip on GitHub
+          $rel = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest"
+          $asset = $rel.assets | Where-Object { $_.name -match "windows" } | Select-Object -First 1
+          Invoke-WebRequest $asset.browser_download_url -OutFile odin.zip
+          Expand-Archive odin.zip -DestinationPath C:\odin
+          echo "C:\odin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Zig (Windows)
+        if: matrix.adapter == 'zig'
+        shell: pwsh
+        run: choco install zig --no-progress -y || true
+
+      - name: Install Nim (Windows)
+        if: matrix.adapter == 'nim'
+        shell: pwsh
+        run: choco install nim --no-progress -y || true
+
+      - name: Install Haxe (Windows)
+        if: matrix.adapter == 'haxe'
+        shell: pwsh
+        run: choco install haxe --no-progress -y || true
+
+      - name: Install Node.js (for JS adapter)
+        if: matrix.adapter == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java (for Kotlin adapter)
+        if: matrix.adapter == 'kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Kotlin
+        if: matrix.adapter == 'kotlin'
+        shell: pwsh
+        run: choco install kotlinc --no-progress -y || true
+
+      # ── Build step ──
+
+      - name: Build ${{ matrix.adapter }} adapter
+        shell: cmd
+        run: |
+          scons platform=windows target=template_release arch=x86_64 ^
+            adapter=${{ matrix.adapter }} ^
+            scons_cache=${{ env.SCONS_CACHE }} ^
+            ${{ inputs.debug_mode == 'true' && 'verbose=yes' || '' }} ^
+            -j%NUMBER_OF_PROCESSORS%
+        continue-on-error: true  # Gather all results, report in summary
+
+      - name: Check output
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Recurse -Filter "*${{ matrix.adapter }}*.dll" -ErrorAction SilentlyContinue
+          if ($found) {
+            Write-Host "✅ Built: $($found.FullName)"
+          } else {
+            Write-Warning "⚠️  No DLL found for adapter: ${{ matrix.adapter }}"
+          }
+
+      - name: Upload adapter DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-adapter-${{ matrix.adapter }}
+          path: |
+            bin\windows\**\*${{ matrix.adapter }}*
+            addons\polylang\bin\windows\**\*${{ matrix.adapter }}*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # STAGE 3: Link final DLL
+  # ─────────────────────────────────────────────
+  link:
+    name: Link Windows GDExtension
+    needs: [setup, build-adapters]
+    if: always() && needs.build-adapters.result != 'cancelled'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp\bin
+          key: godot-cpp-windows-${{ needs.setup.outputs.godot-cpp-hash }}
+
+      - name: Download all adapter artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: windows-adapter-*
+          merge-multiple: true
+          path: bin\windows\
+
+      - name: Setup Python + SCons
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SCons
+        run: pip install scons
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Link final .dll
+        shell: cmd
+        run: |
+          scons platform=windows target=template_release arch=x86_64 ^
+            link_only=yes -j%NUMBER_OF_PROCESSORS%
+
+      - name: Verify output
+        shell: pwsh
+        run: |
+          Write-Host "=== Windows Build Output ==="
+          Get-ChildItem -Recurse -Filter "*.dll" | Select-Object FullName, Length
+          Write-Host "============================"
+
+      - name: Upload final Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-windows-x86_64
+          path: |
+            bin\windows\
+            addons\polylang\bin\windows\
+            addons\polylang\*.gdextension
+          retention-days: 30
+
+      - name: Build summary
+        shell: pwsh
+        run: |
+          $dlls = Get-ChildItem -Recurse -Filter "*.dll" | Measure-Object
+          Add-Content $env:GITHUB_STEP_SUMMARY "### Windows Build Summary"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Metric | Value |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "|--------|-------|"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| DLLs produced | $($dlls.Count) |"
+
+  # ─────────────────────────────────────────────
+  # STAGE 4: Optional smoke test
+  # ─────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (Windows)
+    needs: link
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-windows-x86_64
+          path: artifact\
+
+      - name: Check DLL exports
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse artifact -Filter "*.dll" | Select-Object -First 1
+          if ($dll) {
+            Write-Host "Inspecting: $($dll.FullName)"
+            dumpbin /exports $dll.FullName | Select-String -Pattern "polylang|PolyLang|ScriptLanguage"
+          } else {
+            Write-Warning "No DLL found for smoke test"
+          }

@@ -1,0 +1,327 @@
+name: PolyLang — Android Build
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'adapters/**'
+      - 'SConstruct'
+      - '.github/workflows/build-android.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      abi:
+        description: 'Android ABI (arm64-v8a, x86_64, or both)'
+        required: false
+        default: 'arm64-v8a'
+
+env:
+  GODOT_VERSION: "4.3"
+  TARGET_PLATFORM: android
+  NDK_VERSION: "r26d"
+  NDK_ROOT: /opt/android-ndk
+  API_LEVEL: 21
+  SCONS_CACHE: ${{ github.workspace }}/.scons-cache
+
+jobs:
+  # ─────────────────────────────────────────────
+  # STAGE 1: NDK + godot-cpp setup
+  # ─────────────────────────────────────────────
+  setup:
+    name: Setup Android Build Environment
+    runs-on: ubuntu-22.04
+    outputs:
+      godot-cpp-hash: ${{ steps.hash.outputs.hash }}
+      build-arm64: ${{ steps.abi.outputs.arm64 }}
+      build-x86_64: ${{ steps.abi.outputs.x86_64 }}
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Compute godot-cpp hash
+        id: hash
+        run: echo "hash=$(git submodule status godot-cpp | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Resolve ABI matrix
+        id: abi
+        run: |
+          ABI="${{ inputs.abi || 'arm64-v8a' }}"
+          echo "arm64=$([[ "$ABI" == 'arm64-v8a' || "$ABI" == 'both' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "x86_64=$([[ "$ABI" == 'x86_64' || "$ABI" == 'both' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential scons python3 wget unzip openjdk-17-jdk-headless
+
+      - name: Cache NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NDK_ROOT }}
+          key: android-ndk-${{ env.NDK_VERSION }}
+
+      - name: Download & install Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          wget -q "https://dl.google.com/android/repository/android-ndk-${{ env.NDK_VERSION }}-linux.zip" \
+            -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /opt/
+          mv /opt/android-ndk-${{ env.NDK_VERSION }} ${{ env.NDK_ROOT }}
+          rm /tmp/ndk.zip
+
+      - name: Cache godot-cpp Android build
+        id: cache-godot-cpp
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-android-${{ steps.hash.outputs.hash }}-${{ inputs.abi || 'arm64-v8a' }}
+          restore-keys: godot-cpp-android-${{ steps.hash.outputs.hash }}-
+
+      - name: Build godot-cpp for arm64-v8a
+        if: steps.cache-godot-cpp.outputs.cache-hit != 'true' && steps.abi.outputs.arm64 == 'true'
+        run: |
+          cd godot-cpp
+          scons platform=android target=template_release arch=arm64 \
+            ANDROID_NDK_ROOT=${{ env.NDK_ROOT }} \
+            api_level=${{ env.API_LEVEL }} -j$(nproc)
+
+      - name: Build godot-cpp for x86_64
+        if: steps.cache-godot-cpp.outputs.cache-hit != 'true' && steps.abi.outputs.x86_64 == 'true'
+        run: |
+          cd godot-cpp
+          scons platform=android target=template_release arch=x86_64 \
+            ANDROID_NDK_ROOT=${{ env.NDK_ROOT }} \
+            api_level=${{ env.API_LEVEL }} -j$(nproc)
+
+  # ─────────────────────────────────────────────
+  # STAGE 2: Per-adapter builds (arm64)
+  # ─────────────────────────────────────────────
+  build-adapters-arm64:
+    name: Android arm64 — ${{ matrix.adapter }}
+    needs: setup
+    if: needs.setup.outputs.build-arm64 == 'true'
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter:
+          - lua
+          - python
+          - javascript
+          - ruby
+          - kotlin
+          - rust
+          - odin
+          - wren
+          - squirrel
+          - angelscript
+          - haxe
+          - nim
+          - crystal
+          - zig
+          - janet
+          - tcl
+          - guile
+
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore NDK cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NDK_ROOT }}
+          key: android-ndk-${{ env.NDK_VERSION }}
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-android-${{ needs.setup.outputs.godot-cpp-hash }}-${{ inputs.abi || 'arm64-v8a' }}
+
+      - name: Restore SCons cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCONS_CACHE }}
+          key: scons-android-arm64-${{ matrix.adapter }}-${{ hashFiles('src/**', 'adapters/**') }}
+          restore-keys: scons-android-arm64-${{ matrix.adapter }}-
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential scons python3
+
+      - name: Install Rust cross-compile target
+        if: matrix.adapter == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Zig
+        if: matrix.adapter == 'zig'
+        run: sudo snap install zig --classic --beta || true
+
+      - name: Build ${{ matrix.adapter }} (arm64)
+        env:
+          ANDROID_NDK_ROOT: ${{ env.NDK_ROOT }}
+        run: |
+          scons platform=android target=template_release arch=arm64 \
+            adapter=${{ matrix.adapter }} \
+            api_level=${{ env.API_LEVEL }} \
+            ANDROID_NDK_ROOT=${{ env.NDK_ROOT }} \
+            scons_cache=${{ env.SCONS_CACHE }} \
+            -j$(nproc)
+        continue-on-error: true  # Collect failures, don't abort matrix
+
+      - name: Upload arm64 adapter
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64-${{ matrix.adapter }}
+          path: |
+            bin/android/arm64-v8a/**/*${{ matrix.adapter }}*
+            addons/polylang/bin/android/arm64-v8a/**/*${{ matrix.adapter }}*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # STAGE 2b: Per-adapter builds (x86_64)
+  # ─────────────────────────────────────────────
+  build-adapters-x86_64:
+    name: Android x86_64 — ${{ matrix.adapter }}
+    needs: setup
+    if: needs.setup.outputs.build-x86_64 == 'true'
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter:
+          - lua
+          - python
+          - javascript
+          - ruby
+          - kotlin
+          - rust
+          - odin
+          - wren
+          - squirrel
+          - angelscript
+          - haxe
+          - nim
+          - crystal
+          - zig
+          - janet
+          - tcl
+          - guile
+
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore NDK cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NDK_ROOT }}
+          key: android-ndk-${{ env.NDK_VERSION }}
+
+      - name: Restore godot-cpp cache
+        uses: actions/cache@v4
+        with:
+          path: godot-cpp/bin
+          key: godot-cpp-android-${{ needs.setup.outputs.godot-cpp-hash }}-${{ inputs.abi || 'arm64-v8a' }}
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential scons python3
+
+      - name: Install Rust cross-compile target
+        if: matrix.adapter == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Build ${{ matrix.adapter }} (x86_64)
+        env:
+          ANDROID_NDK_ROOT: ${{ env.NDK_ROOT }}
+        run: |
+          scons platform=android target=template_release arch=x86_64 \
+            adapter=${{ matrix.adapter }} \
+            api_level=${{ env.API_LEVEL }} \
+            ANDROID_NDK_ROOT=${{ env.NDK_ROOT }} \
+            scons_cache=${{ env.SCONS_CACHE }} \
+            -j$(nproc)
+        continue-on-error: true
+
+      - name: Upload x86_64 adapter
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-x86_64-${{ matrix.adapter }}
+          path: |
+            bin/android/x86_64/**/*${{ matrix.adapter }}*
+            addons/polylang/bin/android/x86_64/**/*${{ matrix.adapter }}*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # STAGE 3: Package into .aar / final artifact
+  # ─────────────────────────────────────────────
+  package:
+    name: Package Android GDExtension
+    needs: [setup, build-adapters-arm64, build-adapters-x86_64]
+    if: always() && (needs.build-adapters-arm64.result != 'skipped' || needs.build-adapters-x86_64.result != 'skipped')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout PolyLang
+        uses: actions/checkout@v4
+
+      - name: Download all arm64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: android-arm64-*
+          merge-multiple: true
+          path: bin/android/arm64-v8a/
+
+      - name: Download all x86_64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: android-x86_64-*
+          merge-multiple: true
+          path: bin/android/x86_64/
+        continue-on-error: true  # x86_64 is optional
+
+      - name: Verify outputs
+        run: |
+          echo "=== Android Build Output ==="
+          find bin/android addons/polylang/bin/android \
+            -name "*.so" 2>/dev/null || echo "No .so files found"
+          echo "==========================="
+
+      - name: Upload final Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-android
+          path: |
+            bin/android/
+            addons/polylang/bin/android/
+            addons/polylang/*.gdextension
+          retention-days: 30
+
+      - name: Build summary
+        run: |
+          echo "### Android Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| ABI | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          ARM64_SO=$(find bin/android/arm64-v8a -name "*.so" 2>/dev/null | wc -l)
+          X86_SO=$(find bin/android/x86_64 -name "*.so" 2>/dev/null | wc -l)
+          echo "| arm64-v8a | $ARM64_SO libs |" >> $GITHUB_STEP_SUMMARY
+          echo "| x86_64 | $X86_SO libs |" >> $GITHUB_STEP_SUMMARY
