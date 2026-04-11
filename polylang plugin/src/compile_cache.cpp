@@ -4,6 +4,7 @@
 #include "compile_cache.hpp"
 #include <cstdlib>
 #include <cstdint>
+#include <mutex>
 #include <new>
 
 namespace polylang {
