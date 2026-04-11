@@ -1,0 +1,388 @@
+name: Vendor Dependencies
+
+# Run this manually whenever you need to update vendored deps.
+# It downloads every dependency, commits them into vendor/, and
+# opens a PR so you can review before merging into main.
+#
+# godot-cpp is handled separately as a submodule — this workflow
+# also ensures it is pinned to the correct tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_branch:
+        description: 'Branch name for the vendor PR'
+        required: false
+        default: 'chore/vendor-deps'
+      godot_cpp_tag:
+        description: 'godot-cpp tag to pin (e.g. godot-4.3-stable)'
+        required: false
+        default: 'godot-4.3-stable'
+      lua_version:
+        description: 'Lua version (e.g. 5.4.7)'
+        required: false
+        default: '5.4.7'
+      quickjs_tag:
+        description: 'QuickJS git tag/date'
+        required: false
+        default: '2024-01-13'
+      wren_version:
+        description: 'Wren version tag (e.g. 0.4.0)'
+        required: false
+        default: '0.4.0'
+      squirrel_version:
+        description: 'Squirrel version tag (e.g. v3.2)'
+        required: false
+        default: 'v3.2'
+      angelscript_version:
+        description: 'AngelScript version (e.g. 2.36.1)'
+        required: false
+        default: '2.36.1'
+      nim_version:
+        description: 'Nim version (e.g. 2.0.8)'
+        required: false
+        default: '2.0.8'
+      julia_version:
+        description: 'Julia version (e.g. 1.10.4)'
+        required: false
+        default: '1.10.4'
+
+env:
+  PLUGIN_DIR: "polylang plugin"
+
+jobs:
+  vendor:
+    name: Download & Commit Vendored Deps
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # ── Checkout full repo including submodules ───────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false   # we handle godot-cpp manually below
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ── Create / reset vendor branch ──────────────────────────────────────
+      - name: Create vendor branch
+        run: |
+          BRANCH="${{ inputs.pr_branch }}"
+          git fetch origin || true
+          if git ls-remote --exit-code origin "$BRANCH" > /dev/null 2>&1; then
+            git checkout "$BRANCH"
+            git reset --hard origin/main
+          else
+            git checkout -b "$BRANCH"
+          fi
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 1. godot-cpp — submodule pinned to exact tag
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Pin godot-cpp submodule
+        run: |
+          TAG="${{ inputs.godot_cpp_tag }}"
+          SUBMOD_PATH="$PLUGIN_DIR/godot-cpp"
+
+          # Init submodule if it has never been cloned
+          if [ ! -f "$SUBMOD_PATH/CMakeLists.txt" ]; then
+            git submodule update --init --recursive -- "$SUBMOD_PATH"
+          fi
+
+          cd "$SUBMOD_PATH"
+          git fetch --tags origin
+          git checkout "$TAG"
+          cd -
+
+          git add "$SUBMOD_PATH"
+          echo "godot-cpp pinned to $TAG"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 2. Lua
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor Lua ${{ inputs.lua_version }}
+        run: |
+          VER="${{ inputs.lua_version }}"
+          DEST="vendor/lua"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          curl -sL "https://www.lua.org/ftp/lua-${VER}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$DEST"
+
+          # Write a version pin file
+          echo "$VER" > "$DEST/.vendor-version"
+
+          git add "$DEST"
+          echo "Lua $VER vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 3. QuickJS
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor QuickJS ${{ inputs.quickjs_tag }}
+        run: |
+          TAG="${{ inputs.quickjs_tag }}"
+          DEST="vendor/quickjs"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          # Sparse clone — we only need the specific files cmake uses
+          git clone --depth 1 --branch "$TAG" \
+            https://github.com/bellard/quickjs.git "$DEST" 2>/dev/null || \
+          git clone --depth 1 \
+            https://github.com/bellard/quickjs.git "$DEST"
+
+          # Remove git metadata — it's vendored, not a submodule
+          rm -rf "$DEST/.git"
+
+          echo "$TAG" > "$DEST/.vendor-version"
+          git add "$DEST"
+          echo "QuickJS $TAG vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 4. Wren
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor Wren ${{ inputs.wren_version }}
+        run: |
+          VER="${{ inputs.wren_version }}"
+          DEST="vendor/wren"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          curl -sL "https://github.com/wren-lang/wren/archive/refs/tags/${VER}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$DEST"
+
+          echo "$VER" > "$DEST/.vendor-version"
+          git add "$DEST"
+          echo "Wren $VER vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 5. Squirrel
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor Squirrel ${{ inputs.squirrel_version }}
+        run: |
+          TAG="${{ inputs.squirrel_version }}"
+          DEST="vendor/squirrel"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          curl -sL "https://github.com/albertodemichelis/squirrel/archive/refs/tags/${TAG}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$DEST"
+
+          echo "$TAG" > "$DEST/.vendor-version"
+          git add "$DEST"
+          echo "Squirrel $TAG vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 6. AngelScript
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor AngelScript ${{ inputs.angelscript_version }}
+        run: |
+          VER="${{ inputs.angelscript_version }}"
+          DEST="vendor/angelscript"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          curl -sL "https://www.angelcode.com/angelscript/sdk/files/angelscript_${VER}.zip" \
+            -o /tmp/angelscript.zip
+          unzip -q /tmp/angelscript.zip -d /tmp/angelscript_extracted
+          # The zip contains an sdk/ folder — move just that
+          cp -r /tmp/angelscript_extracted/sdk/. "$DEST/"
+          rm -rf /tmp/angelscript.zip /tmp/angelscript_extracted
+
+          # Compute and save the sha256 for the vendor/CMakeLists.txt placeholder
+          SHA=$(sha256sum /tmp/angelscript.zip 2>/dev/null || \
+                curl -sL "https://www.angelcode.com/angelscript/sdk/files/angelscript_${VER}.zip" \
+                | sha256sum | awk '{print $1}')
+          echo "$VER" > "$DEST/.vendor-version"
+          echo "SHA256: $SHA" >> "$DEST/.vendor-version"
+
+          git add "$DEST"
+          echo "AngelScript $VER vendored → $DEST"
+          echo "AngelScript SHA256: $SHA"
+          echo "ANGELSCRIPT_SHA256=$SHA" >> $GITHUB_ENV
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 7. Nim binary
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor Nim ${{ inputs.nim_version }}
+        run: |
+          VER="${{ inputs.nim_version }}"
+          DEST="vendor/nim"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          # Download the Linux x64 binary distribution
+          curl -sL "https://nim-lang.org/download/nim-${VER}-linux_x64.tar.xz" \
+            | tar -xJ --strip-components=1 -C "$DEST"
+
+          echo "$VER" > "$DEST/.vendor-version"
+          git add "$DEST"
+          echo "Nim $VER vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 8. Julia binary
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Vendor Julia ${{ inputs.julia_version }}
+        run: |
+          VER="${{ inputs.julia_version }}"
+          DEST="vendor/julia"
+          MAJOR_MINOR=$(echo "$VER" | cut -d. -f1-2)
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          curl -sL "https://julialang-s3.julialang.org/bin/linux/x64/${MAJOR_MINOR}/julia-${VER}-linux-x86_64.tar.gz" \
+            | tar -xz --strip-components=1 -C "$DEST"
+
+          echo "$VER" > "$DEST/.vendor-version"
+          git add "$DEST"
+          echo "Julia $VER vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 9. hxcpp (Haxe + haxelib)
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Install Haxe and vendor hxcpp
+        run: |
+          DEST="vendor/hxcpp"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+
+          # Install Haxe toolchain (needed to run haxelib)
+          sudo apt-get install -y --no-install-recommends haxe neko
+          mkdir -p ~/haxelib && haxelib setup ~/haxelib
+
+          # Pull hxcpp via haxelib
+          haxelib install hxcpp
+
+          # Copy the installed hxcpp into vendor/
+          HXCPP_PATH=$(haxelib path hxcpp | head -1)
+          cp -r "$HXCPP_PATH/." "$DEST/"
+
+          # Record version
+          HXCPP_VER=$(haxelib list | grep hxcpp | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "${HXCPP_VER:-latest}" > "$DEST/.vendor-version"
+
+          git add "$DEST"
+          echo "hxcpp vendored → $DEST"
+
+      # ══════════════════════════════════════════════════════════════════════
+      # 10. Patch vendor/CMakeLists.txt with real AngelScript SHA256
+      # ══════════════════════════════════════════════════════════════════════
+      - name: Patch AngelScript SHA256 in vendor/CMakeLists.txt
+        run: |
+          SHA="${{ env.ANGELSCRIPT_SHA256 }}"
+          if [ -n "$SHA" ] && [ -f "vendor/CMakeLists.txt" ]; then
+            # Replace the placeholder hash line
+            sed -i "s|URL_HASH SHA256=c0c833c1c95b7d8c9b4f6c9c9d9e3d3c9f9e9b9a9d9c9b9a8d8c8b8a8d8c8b8.*|URL_HASH SHA256=${SHA}|" \
+              vendor/CMakeLists.txt
+            git add vendor/CMakeLists.txt
+            echo "Patched AngelScript SHA256 → $SHA"
+          fi
+
+      # ── Update vendor/README.md with pinned versions ──────────────────────
+      - name: Update vendor README with pinned versions
+        run: |
+          cat > vendor/README.md <<EOF
+          # PolyLang — Vendored Dependencies
+
+          Last updated: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          | Dependency | Version | Location |
+          |------------|---------|----------|
+          | godot-cpp | ${{ inputs.godot_cpp_tag }} | \`polylang plugin/godot-cpp\` (submodule) |
+          | Lua | ${{ inputs.lua_version }} | \`vendor/lua/\` |
+          | QuickJS | ${{ inputs.quickjs_tag }} | \`vendor/quickjs/\` |
+          | Wren | ${{ inputs.wren_version }} | \`vendor/wren/\` |
+          | Squirrel | ${{ inputs.squirrel_version }} | \`vendor/squirrel/\` |
+          | AngelScript | ${{ inputs.angelscript_version }} | \`vendor/angelscript/\` |
+          | Nim | ${{ inputs.nim_version }} | \`vendor/nim/\` |
+          | Julia | ${{ inputs.julia_version }} | \`vendor/julia/\` |
+          | hxcpp | latest | \`vendor/hxcpp/\` |
+
+          ## godot-cpp
+          Managed as a git submodule at \`polylang plugin/godot-cpp\`.
+          Pinned to tag \`${{ inputs.godot_cpp_tag }}\` — must match your Godot engine version.
+          To update: run this workflow again with a different \`godot_cpp_tag\`.
+
+          ## Updating a dependency
+          Re-run this workflow (Actions → Vendor Dependencies → Run workflow)
+          with the new version numbers. It will reset the vendor branch and open
+          a fresh PR.
+          EOF
+
+          git add vendor/README.md
+
+      # ── Commit everything ─────────────────────────────────────────────────
+      - name: Commit vendored deps
+        run: |
+          git diff --cached --quiet && echo "Nothing changed" && exit 0
+
+          git commit -m "chore: vendor all dependencies
+
+          godot-cpp : ${{ inputs.godot_cpp_tag }} (submodule)
+          Lua       : ${{ inputs.lua_version }}
+          QuickJS   : ${{ inputs.quickjs_tag }}
+          Wren      : ${{ inputs.wren_version }}
+          Squirrel  : ${{ inputs.squirrel_version }}
+          AngelScript: ${{ inputs.angelscript_version }}
+          Nim       : ${{ inputs.nim_version }}
+          Julia     : ${{ inputs.julia_version }}
+          hxcpp     : latest
+
+          Generated by the Vendor Dependencies workflow.
+          "
+
+      # ── Push branch ───────────────────────────────────────────────────────
+      - name: Push vendor branch
+        run: |
+          git push origin "${{ inputs.pr_branch }}" --force
+
+      # ── Open PR ───────────────────────────────────────────────────────────
+      - name: Open Pull Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = '${{ inputs.pr_branch }}';
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              head:  `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+
+            if (prs.length > 0) {
+              console.log(`PR already exists: ${prs[0].html_url}`);
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: 'chore: vendor all dependencies',
+              head:  branch,
+              base:  'main',
+              body: `## Vendored Dependencies
+
+            This PR was generated automatically by the **Vendor Dependencies** workflow.
+
+            | Dependency | Version |
+            |------------|---------|
+            | godot-cpp | ${{ inputs.godot_cpp_tag }} |
+            | Lua | ${{ inputs.lua_version }} |
+            | QuickJS | ${{ inputs.quickjs_tag }} |
+            | Wren | ${{ inputs.wren_version }} |
+            | Squirrel | ${{ inputs.squirrel_version }} |
+            | AngelScript | ${{ inputs.angelscript_version }} |
+            | Nim | ${{ inputs.nim_version }} |
+            | Julia | ${{ inputs.julia_version }} |
+            | hxcpp | latest |
+
+            ### Before merging
+            - [ ] Check the \`vendor/README.md\` versions look correct
+            - [ ] Verify the AngelScript SHA256 was patched in \`vendor/CMakeLists.txt\`
+            - [ ] Trigger a test build on this branch to confirm everything compiles
+            `,
+            });
+
+            console.log(`PR opened: ${pr.html_url}`);
