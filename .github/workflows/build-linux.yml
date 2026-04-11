@@ -128,7 +128,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/install
-          key: vendor-linux-${{ hashFiles('vendor/CMakeLists.txt') }}-v2
+          key: vendor-linux-${{ hashFiles('vendor/CMakeLists.txt') }}-v3
 
       - name: Build vendored deps
         if: steps.cache_vendor.outputs.cache-hit != 'true'
@@ -209,6 +209,7 @@ jobs:
             -DSQUIRREL_LIB="${VENDOR_INSTALL}/lib/libsquirrel.so" \
             -DAS_INC="${VENDOR_INSTALL}/include" \
             -DAS_LIB="${VENDOR_INSTALL}/lib/libangelscript.so" \
+            -DAS_ADDONS_LIB="${VENDOR_INSTALL}/lib" \
             -DPL_ENABLE_HARDENING=OFF \
             -DPOLYLANG_BUILD_TESTS=OFF
 

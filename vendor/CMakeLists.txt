@@ -93,12 +93,43 @@ add_library(angelscript SHARED ${AS_SOURCES})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
     $<INSTALL_INTERFACE:include>)
-set_target_properties(angelscript PROPERTIES CXX_STANDARD 11)
+set_target_properties(angelscript PROPERTIES CXX_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_options(angelscript PRIVATE /EHsc)
 endif()
 install(TARGETS angelscript LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY angelscript/angelscript/include/ DESTINATION include)
+
+# ── AngelScript add-ons (scriptstdstring, scriptarray) ────────────────────────
+# The adapter uses these headers — install them into named subdirs so
+# #include <scriptstdstring/scriptstdstring.h> resolves correctly.
+set(AS_ADDONS "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/add_on")
+
+add_library(as_scriptstdstring STATIC
+    ${AS_ADDONS}/scriptstdstring/scriptstdstring.cpp)
+target_include_directories(as_scriptstdstring PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
+    $<BUILD_INTERFACE:${AS_ADDONS}>
+    $<INSTALL_INTERFACE:include>)
+set_target_properties(as_scriptstdstring PROPERTIES
+    CXX_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
+
+add_library(as_scriptarray STATIC
+    ${AS_ADDONS}/scriptarray/scriptarray.cpp)
+target_include_directories(as_scriptarray PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
+    $<BUILD_INTERFACE:${AS_ADDONS}>
+    $<INSTALL_INTERFACE:include>)
+set_target_properties(as_scriptarray PROPERTIES
+    CXX_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
+
+install(TARGETS as_scriptstdstring as_scriptarray
+    LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+# Install add-on headers into named subdirs matching the #include paths
+install(FILES ${AS_ADDONS}/scriptstdstring/scriptstdstring.h
+    DESTINATION include/scriptstdstring)
+install(FILES ${AS_ADDONS}/scriptarray/scriptarray.h
+    DESTINATION include/scriptarray)
 
 message(STATUS "")
 message(STATUS "=== PolyLang Vendor Build ===")
