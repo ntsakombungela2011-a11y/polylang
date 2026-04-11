@@ -33,18 +33,18 @@ static jl_value_t* pl_to_jl(const PLValue& v) {
         case PL_TYPE_FLOAT:  return jl_box_float64(v.f);
         case PL_TYPE_STRING: return jl_cstr_to_string(v.s ? v.s : "");
         case PL_TYPE_VEC2: {
-            jl_value_t* arr = jl_alloc_array_1d(
+            jl_array_t* arr_raw = jl_alloc_array_1d(
                 jl_apply_array_type((jl_value_t*)jl_float32_type, 1), 2);
-            float* d = (float*)jl_array_data(arr);
+            float* d = (float*)jl_array_data(arr_raw);
             d[0] = v.v2[0]; d[1] = v.v2[1];
-            return arr;
+            return (jl_value_t*)arr_raw;
         }
         case PL_TYPE_VEC3: {
-            jl_value_t* arr = jl_alloc_array_1d(
+            jl_array_t* arr_raw = jl_alloc_array_1d(
                 jl_apply_array_type((jl_value_t*)jl_float32_type, 1), 3);
-            float* d = (float*)jl_array_data(arr);
+            float* d = (float*)jl_array_data(arr_raw);
             d[0] = v.v3[0]; d[1] = v.v3[1]; d[2] = v.v3[2];
-            return arr;
+            return (jl_value_t*)arr_raw;
         }
         default: return jl_nothing;
     }
@@ -55,7 +55,7 @@ static void jl_to_pl(jl_value_t* val, PLValue& out) {
     if (!val || val == jl_nothing) { out.type = PL_TYPE_NIL; return; }
     if (jl_is_bool(val))   { out.type = PL_TYPE_BOOL;  out.b = (jl_unbox_bool(val) != 0); return; }
     if (jl_is_int64(val))  { out.type = PL_TYPE_INT;   out.i = jl_unbox_int64(val); return; }
-    if (jl_is_float64(val)){ out.type = PL_TYPE_FLOAT; out.f = jl_unbox_float64(val); return; }
+    if (jl_typeis(val, jl_float64_type)){ out.type = PL_TYPE_FLOAT; out.f = jl_unbox_float64(val); return; }
     if (jl_is_string(val)) { out.type = PL_TYPE_STRING; out.s = strdup(jl_string_ptr(val)); return; }
     out.type = PL_TYPE_NIL;
 }
@@ -165,7 +165,9 @@ static void* jl_instantiate_class(void* ch, const char*) {
     uintptr_t key = g_key_counter++;
     jl_value_t* key_val = jl_box_uint64((uint64_t)key);
     JL_GC_PUSH2(&obj, &key_val);
-    jl_call2(jl_get_function(jl_base_module, "setindex!"), g_instance_roots, obj, key_val);
+    { jl_value_t* _si_fn = jl_get_function(jl_base_module, "setindex!");
+      jl_value_t* _si_args[3] = {g_instance_roots, obj, key_val};
+      jl_call(_si_fn, _si_args, 3); }
     JL_GC_POP();
 
     auto* inst = new JlInstance(); inst->compiled = c; inst->obj = obj; inst->root_key = key;
@@ -227,7 +229,10 @@ static int jl_set_prop(void* raw, const char* name, const PLValue* v) {
     std::lock_guard<std::mutex> lk(g_julia_mutex);
     jl_value_t* val = pl_to_jl(*v);
     JL_GC_PUSH1(&val);
-    jl_set_field(i->obj, name, val);
+    // jl_set_field removed in Julia 1.10+ — find field index and use jl_set_nth_field
+    jl_datatype_t* dt = (jl_datatype_t*)jl_typeof(i->obj);
+    int field_idx = jl_field_index(dt, jl_symbol(name), 0);
+    if (field_idx >= 0) jl_set_nth_field(i->obj, (size_t)field_idx, val);
     JL_GC_POP();
     return jl_exception_occurred() ? (jl_exception_clear(), PL_ERR_PROP_NOT_FOUND) : PL_OK;
 }
