@@ -362,7 +362,7 @@ GDExtensionScriptInstancePtr PolyLangScriptInstance::create_godot_instance(
     info.free_property_list_func = [](GDExtensionScriptInstanceDataPtr, const GDExtensionPropertyInfo*, uint32_t) {};
     info.get_method_list_func    = [](GDExtensionScriptInstanceDataPtr, uint32_t* r) -> const GDExtensionMethodInfo* { *r=0; return nullptr; };
     info.free_method_list_func   = [](GDExtensionScriptInstanceDataPtr, const GDExtensionMethodInfo*, uint32_t) {};
-    return script_instance_create3(&info, inst);
+    return godot::gdextension_interface::script_instance_create3(&info, inst);
 }
 
 } // namespace polylang
