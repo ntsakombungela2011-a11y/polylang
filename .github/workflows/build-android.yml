@@ -21,7 +21,7 @@ env:
   BUILD_DIR:      build_android
   # CMakeLists.txt has a hard FATAL_ERROR below API 28 — do NOT lower this
   ANDROID_API:    "28"
-  NDK_VERSION:    "27.0.12077973"
+  NDK_VERSION:    "r27d"
   VENDOR_INSTALL: ${{ github.workspace }}/vendor/install-android
 
 jobs:
