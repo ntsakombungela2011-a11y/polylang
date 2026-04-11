@@ -67,8 +67,60 @@ jobs:
             libwayland-dev libxkbcommon-dev \
             python3-dev \
             golang-go \
-            nim \
             dotnet-sdk-8.0 || true
+          # Note: Nim and Julia are NOT installed via apt — they are downloaded
+          # at pinned versions from vendor/nim-version and vendor/julia-version
+
+      # ── Nim (pinned version from vendor) ─────────────────────────────────
+      - name: Read Nim version pin
+        id: nim_ver
+        run: |
+          V=$(cat vendor/nim-version/VERSION 2>/dev/null | tr -d '[:space:]') || V="2.0.8"
+          echo "version=${V}" >> $GITHUB_OUTPUT
+
+      - name: Cache Nim binary
+        id: cache_nim
+        uses: actions/cache@v4
+        with:
+          path: vendor/nim-bin
+          key: nim-linux-${{ steps.nim_ver.outputs.version }}-v1
+
+      - name: Download Nim ${{ steps.nim_ver.outputs.version }}
+        if: steps.cache_nim.outputs.cache-hit != 'true'
+        run: |
+          VER="${{ steps.nim_ver.outputs.version }}"
+          mkdir -p vendor/nim-bin
+          curl -sL "https://nim-lang.org/download/nim-${VER}-linux_x64.tar.xz" \
+            | tar -xJ --strip-components=1 -C vendor/nim-bin
+
+      - name: Add Nim to PATH
+        run: echo "${{ github.workspace }}/vendor/nim-bin/bin" >> $GITHUB_PATH
+
+      # ── Julia (pinned version from vendor) ───────────────────────────────
+      - name: Read Julia version pin
+        id: julia_ver
+        run: |
+          V=$(cat vendor/julia-version/VERSION 2>/dev/null | tr -d '[:space:]') || V="1.10.4"
+          echo "version=${V}" >> $GITHUB_OUTPUT
+
+      - name: Cache Julia binary
+        id: cache_julia
+        uses: actions/cache@v4
+        with:
+          path: vendor/julia-bin
+          key: julia-linux-${{ steps.julia_ver.outputs.version }}-v1
+
+      - name: Download Julia ${{ steps.julia_ver.outputs.version }}
+        if: steps.cache_julia.outputs.cache-hit != 'true'
+        run: |
+          VER="${{ steps.julia_ver.outputs.version }}"
+          MM=$(echo "$VER" | cut -d. -f1-2)
+          mkdir -p vendor/julia-bin
+          curl -sL "https://julialang-s3.julialang.org/bin/linux/x64/${MM}/julia-${VER}-linux-x86_64.tar.gz" \
+            | tar -xz --strip-components=1 -C vendor/julia-bin
+
+      - name: Set JULIA_HOME
+        run: echo "JULIA_HOME=${{ github.workspace }}/vendor/julia-bin" >> $GITHUB_ENV
 
       # ── Vendored C deps (Lua, QuickJS, Wren, Squirrel, AngelScript) ───────
       - name: Cache vendored deps
