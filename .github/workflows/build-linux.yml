@@ -199,6 +199,16 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="${VENDOR_INSTALL}" \
+            -DLUA_INCLUDE_DIR="${VENDOR_INSTALL}/include/lua5.4" \
+            -DLUA_LIBRARIES="${VENDOR_INSTALL}/lib/liblua5.4.so" \
+            -DQUICKJS_INCLUDE="${VENDOR_INSTALL}/include" \
+            -DQUICKJS_LIB="${VENDOR_INSTALL}/lib/libquickjs.so" \
+            -DWREN_INC="${VENDOR_INSTALL}/include" \
+            -DWREN_LIB="${VENDOR_INSTALL}/lib/libwren.so" \
+            -DSQUIRREL_INC="${VENDOR_INSTALL}/include" \
+            -DSQUIRREL_LIB="${VENDOR_INSTALL}/lib/libsquirrel.so" \
+            -DAS_INC="${VENDOR_INSTALL}/include" \
+            -DAS_LIB="${VENDOR_INSTALL}/lib/libangelscript.so" \
             -DPL_ENABLE_HARDENING=OFF \
             -DPOLYLANG_BUILD_TESTS=OFF
 
