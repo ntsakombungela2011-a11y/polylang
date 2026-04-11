@@ -89,6 +89,20 @@ install(DIRECTORY squirrel/include/ DESTINATION include)
 
 # ── AngelScript ───────────────────────────────────────────────────────────────
 file(GLOB AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/*.cpp")
+
+# AngelScript requires platform-specific assembly for native calls.
+# The .S file is NOT picked up by *.cpp glob — add it explicitly.
+if(ANDROID AND CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
+    list(APPEND AS_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_arm64.S")
+elseif(UNIX AND NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    list(APPEND AS_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_arm64.S")
+elseif(UNIX AND NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    list(APPEND AS_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_x64_gcc.S")
+endif()
+
 add_library(angelscript SHARED ${AS_SOURCES})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
