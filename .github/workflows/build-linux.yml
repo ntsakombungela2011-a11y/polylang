@@ -128,7 +128,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/install
-          key: vendor-linux-${{ hashFiles('vendor/CMakeLists.txt') }}-v4
+          key: vendor-linux-${{ hashFiles('vendor/CMakeLists.txt') }}-v5
 
       - name: Build vendored deps
         if: steps.cache_vendor.outputs.cache-hit != 'true'

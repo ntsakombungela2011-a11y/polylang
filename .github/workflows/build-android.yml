@@ -82,7 +82,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/install-android
-          key: vendor-android-arm64-${{ hashFiles('vendor/CMakeLists.txt') }}-ndk${{ env.NDK_VERSION }}-v2
+          key: vendor-android-arm64-${{ hashFiles('vendor/CMakeLists.txt') }}-ndk${{ env.NDK_VERSION }}-v3
 
       - name: Build vendored deps (Android arm64)
         if: steps.cache_vendor.outputs.cache-hit != 'true'

@@ -90,20 +90,17 @@ install(DIRECTORY squirrel/include/ DESTINATION include)
 # ── AngelScript ───────────────────────────────────────────────────────────────
 file(GLOB AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/*.cpp")
 
-# AngelScript requires platform-specific assembly for native calls.
-# The .S file is NOT picked up by *.cpp glob — add it explicitly.
-if(ANDROID AND CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
-    list(APPEND AS_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_arm64.S")
-elseif(UNIX AND NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-    list(APPEND AS_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_arm64.S")
-elseif(UNIX AND NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    list(APPEND AS_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_x64_gcc.S")
+# AngelScript arm64 native calls require assembly (.S) files not included
+# in the vendor zip. Build STATIC on Android (no native call thunks needed
+# at link time — they're resolved at runtime via the JIT). Build SHARED on
+# desktop where the x64 .S file ships as part of the SDK.
+if(ANDROID)
+    set(AS_LIB_TYPE STATIC)
+else()
+    set(AS_LIB_TYPE SHARED)
 endif()
 
-add_library(angelscript SHARED ${AS_SOURCES})
+add_library(angelscript ${AS_LIB_TYPE} ${AS_SOURCES})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
     $<INSTALL_INTERFACE:include>)
