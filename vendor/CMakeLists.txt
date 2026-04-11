@@ -40,10 +40,11 @@ install(FILES
 # ── QuickJS ───────────────────────────────────────────────────────────────────
 add_library(quickjs SHARED
     quickjs/quickjs.c
+    quickjs/quickjs-libc.c
     quickjs/libregexp.c
     quickjs/libunicode.c
     quickjs/cutils.c
-    quickjs/libbf.c)
+    quickjs/dtoa.c)
 target_include_directories(quickjs PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/quickjs>
     $<INSTALL_INTERFACE:include/quickjs>)
