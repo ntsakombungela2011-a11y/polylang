@@ -13,6 +13,7 @@
 #include <sqstdio.h>
 #include <sqstdmath.h>
 #include <sqstdstring.h>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
