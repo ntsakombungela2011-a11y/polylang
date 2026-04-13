@@ -16,9 +16,11 @@
 //   before the sandbox is applied, that global is absent from
 //   the custom _ENV so access yields nil, not a real module.
 // =============================================================
+extern "C" {
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+}
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
