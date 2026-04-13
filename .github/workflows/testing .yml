@@ -1,0 +1,2 @@
+- name: Causinator 9000 CI Diagnosis
+  uses: sylvainsf/causinator9000@v1.6.0
