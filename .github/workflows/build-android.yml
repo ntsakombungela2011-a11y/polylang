@@ -208,6 +208,10 @@ jobs:
           find pkg -type f | sort
           zip -r polylang-android.zip pkg/
 
+      - name: Causinator 9000 CI Diagnosis
+        if: failure()
+        uses: sylvainsf/causinator9000@v1.6.0
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

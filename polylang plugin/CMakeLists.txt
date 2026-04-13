@@ -214,9 +214,11 @@ else()
 endif()
 
 # ── AngelScript ──────────────────────────────────────────────
+# Android arm64 requires as_callfunc_arm64.S assembly which is not
+# in the vendored sources — skip AngelScript on Android entirely.
 find_library(AS_LIB NAMES angelscript QUIET)
 find_path(AS_INC NAMES angelscript.h QUIET)
-if(AS_LIB AND AS_INC)
+if(AS_LIB AND AS_INC AND NOT ANDROID)
     pl_adapter(polylang_adapter_as adapters/angelscript/polylang_angelscript_adapter.cpp)
     target_link_libraries(polylang_adapter_as PRIVATE ${AS_LIB})
     target_include_directories(polylang_adapter_as PRIVATE ${AS_INC})

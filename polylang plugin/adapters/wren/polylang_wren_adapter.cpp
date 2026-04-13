@@ -8,7 +8,9 @@
 //            no foreign class or method bindings for file/process/net.
 //            The sandboxed write/error callbacks suppress output.
 // =============================================================
+extern "C" {
 #include <wren.h>
+}
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
