@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-4.3-stable-v1
+          key: godot-cpp-windows-4.3-stable-v2
 
       - name: Fetch godot-cpp (4.3-stable)
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
@@ -141,8 +141,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: "${{ env.PLUGIN_DIR }}\\${{ env.BUILD_DIR }}"
-          key: cmake-windows-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v1
+          key: cmake-windows-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v2
           restore-keys: cmake-windows-
+
+      - name: Verify or clean build cache
+        run: |
+          $genHeaders = "$env:PLUGIN_DIR\$env:BUILD_DIR\godot-cpp\gen\include"
+          if (-not (Test-Path $genHeaders)) {
+            Write-Host "Generated godot-cpp headers missing — clearing cmake cache to force full reconfigure"
+            $buildDir = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+            if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
+          } else {
+            Write-Host "Generated headers present: $genHeaders"
+          }
 
       - name: Configure (Windows x64)
         run: |
@@ -156,6 +167,7 @@ jobs:
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
+            -DGODOT_CPP_GEN_INCLUDE="$b/godot-cpp/gen/include" `
             -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include/lua5.4" `
             -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua5.4.lib" `
             -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
