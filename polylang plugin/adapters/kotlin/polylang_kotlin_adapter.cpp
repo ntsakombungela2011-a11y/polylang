@@ -14,6 +14,7 @@
 //             options; this adapter uses class-level deny-list as fallback).
 // =============================================================
 #include <jni.h>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

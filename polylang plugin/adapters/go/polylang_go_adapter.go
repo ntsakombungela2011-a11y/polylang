@@ -16,8 +16,19 @@ package main
 
 /*
 #include "../../include/pl_adapter_vtable.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static inline void polylang_go_pl_value_init(PLValue* v) {
+    pl_value_init(v);
+}
+
+static inline void polylang_go_write_stderr(const char* s) {
+    if (s != NULL) {
+        fputs(s, stderr);
+    }
+}
 */
 import "C"
 
@@ -98,7 +109,7 @@ func plToGo(v *C.PLValue) interface{} {
 }
 
 func goToPlValue(val interface{}, out *C.PLValue) {
-	C.pl_value_init(out)
+	C.polylang_go_pl_value_init(out)
 	if val == nil {
 		return
 	}
@@ -201,7 +212,7 @@ func go_call_method(raw unsafe.Pointer, name *C.char, args *C.PLValue, argc C.in
 	if raw == nil || ret == nil {
 		return C.PL_ERR_GENERIC
 	}
-	C.pl_value_init(ret)
+	C.polylang_go_pl_value_init(ret)
 	inst := cgo.Handle(uintptr(raw)).Value().(*goInstance)
 	methodName := C.GoString(name)
 
@@ -278,7 +289,7 @@ func go_get_property(raw unsafe.Pointer, name *C.char, out *C.PLValue) C.int {
 	if raw == nil {
 		return C.PL_ERR_GENERIC
 	}
-	C.pl_value_init(out)
+	C.polylang_go_pl_value_init(out)
 	inst := cgo.Handle(uintptr(raw)).Value().(*goInstance)
 	inst.mu.Lock()
 	defer inst.mu.Unlock()
@@ -343,9 +354,9 @@ func sandboxSuffix(s bool) string {
 type debugWriter struct{}
 
 func (debugWriter) Write(p []byte) (int, error) {
-	// Writes to stderr via C fprintf.
+	// Writes to stderr via a tiny C wrapper so cgo can resolve it on Windows.
 	cs := C.CString(string(p))
-	C.fprintf(C.stderr, cs)
+	C.polylang_go_write_stderr(cs)
 	C.free(unsafe.Pointer(cs))
 	return len(p), nil
 }
