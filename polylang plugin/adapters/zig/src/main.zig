@@ -138,7 +138,7 @@ fn compileCore(source: ?[*:0]const u8, path: ?[*:0]const u8, sandboxed: bool) ca
     c_obj.* = .{ .class_name = name, .type_info = info, .sandboxed = sandboxed };
     const key = @intFromPtr(c_obj);
     map_lock.lock();
-    compiled_map.put(key, c_obj) catch { gpa.destroy(c_obj); map_lock.unlock(); return null; }
+    compiled_map.put(key, c_obj) catch { gpa.destroy(c_obj); map_lock.unlock(); return null; };
     map_lock.unlock();
     return @ptrFromInt(key);
 }
@@ -171,7 +171,7 @@ export fn zig_instantiate_class(ch: ?*anyopaque, _path: ?[*:0]const u8) callconv
     inst.* = .{ .compiled = compiled, .obj = obj, .mutex = .{} };
     const ikey = @intFromPtr(inst);
     map_lock.lock();
-    instance_map.put(ikey, inst) catch { gpa.destroy(inst); map_lock.unlock(); return null; }
+    instance_map.put(ikey, inst) catch { gpa.destroy(inst); map_lock.unlock(); return null; };
     map_lock.unlock();
     return @ptrFromInt(ikey);
 }

@@ -241,12 +241,45 @@ typedef struct JSValue {
 #define JS_VALUE_GET_SHORT_BIG_INT(v) ((v).u.short_big_int)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+#ifdef __cplusplus
+static inline JSValue JS_MKVAL_IMPL(int64_t tag, int32_t val)
+{
+    JSValue v;
+    v.u.int32 = val;
+    v.tag = tag;
+    return v;
+}
+
+static inline JSValue JS_MKPTR_IMPL(int64_t tag, void *p)
+{
+    JSValue v;
+    v.u.ptr = p;
+    v.tag = tag;
+    return v;
+}
+
+static inline JSValue JS_MKNAN_IMPL(void)
+{
+    JSValue v;
+    v.u.float64 = JS_FLOAT64_NAN;
+    v.tag = JS_TAG_FLOAT64;
+    return v;
+}
+
+#define JS_MKVAL(tag, val) JS_MKVAL_IMPL((tag), (val))
+#define JS_MKPTR(tag, p) JS_MKPTR_IMPL((tag), (p))
+#else
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
 
+#ifdef __cplusplus
+#define JS_NAN JS_MKNAN_IMPL()
+#else
 #define JS_NAN (JSValue){ .u.float64 = JS_FLOAT64_NAN, JS_TAG_FLOAT64 }
+#endif
 
 static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
 {

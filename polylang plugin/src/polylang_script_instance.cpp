@@ -29,7 +29,6 @@
 #include "pl_cross_inherit.hpp"
 
 #include <godot_cpp/core/error_macros.hpp>
-#include <godot_cpp/core/gdextension_interface_loader.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 

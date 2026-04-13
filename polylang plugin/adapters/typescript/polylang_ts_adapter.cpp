@@ -108,12 +108,12 @@ struct TsCompiled {
     JSContext*  ctx{nullptr};
     std::mutex  ctx_mutex;
     std::string class_name;
-    JSValue     class_val{JS_UNDEFINED};
+    JSValue     class_val = JS_UNDEFINED;
     bool        sandboxed{false};
 };
 struct TsInstance {
     TsCompiled* compiled{nullptr};
-    JSValue     obj{JS_UNDEFINED};
+    JSValue     obj = JS_UNDEFINED;
 };
 
 // ── Core compile ──────────────────────────────────────────────

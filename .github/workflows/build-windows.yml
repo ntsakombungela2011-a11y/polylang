@@ -66,10 +66,34 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor\install-windows
-          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt') }}-v1
+          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v2
+
+      - name: Verify vendored deps (Windows)
+        id: verify_vendor
+        run: |
+          $required = @(
+            "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
+            "$env:VENDOR_INSTALL\lib\quickjs.lib",
+            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
+            "$env:VENDOR_INSTALL\lib\wren.lib",
+            "$env:VENDOR_INSTALL\lib\squirrel.lib",
+            "$env:VENDOR_INSTALL\lib\angelscript.lib"
+          )
+
+          $missing = @($required | Where-Object { -not (Test-Path $_) })
+          if ($missing.Count -gt 0) {
+            Write-Host "Vendored dependency cache is incomplete:"
+            $missing | ForEach-Object { Write-Host "  $_" }
+            if (Test-Path 'vendor\build-windows') { Remove-Item 'vendor\build-windows' -Recurse -Force }
+            if (Test-Path $env:VENDOR_INSTALL) { Remove-Item $env:VENDOR_INSTALL -Recurse -Force }
+            "vendor_ready=false" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Vendored dependency cache is complete."
+            "vendor_ready=true" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Build vendored deps (Windows)
-        if: steps.cache_vendor.outputs.cache-hit != 'true'
+        if: steps.cache_vendor.outputs.cache-hit != 'true' || steps.verify_vendor.outputs.vendor_ready != 'true'
         run: |
           cmake `
             -S vendor `

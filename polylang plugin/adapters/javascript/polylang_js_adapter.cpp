@@ -161,13 +161,13 @@ struct JsCompiled {
     JSContext*  ctx{nullptr};   // Isolated context per compiled script
     std::mutex  ctx_mutex;
     std::string class_name;
-    JSValue     class_val{JS_UNDEFINED};
+    JSValue     class_val = JS_UNDEFINED;
     bool        sandboxed{false};
 };
 
 struct JsInstance {
     JsCompiled* compiled{nullptr};
-    JSValue     obj{JS_UNDEFINED};
+    JSValue     obj = JS_UNDEFINED;
 };
 
 // ── Shared compile core ───────────────────────────────────────
