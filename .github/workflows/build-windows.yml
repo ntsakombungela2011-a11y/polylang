@@ -38,31 +38,22 @@ jobs:
           submodules: false
 
       # ── godot-cpp ─────────────────────────────────────────────────────────
-      - name: Detect godot-cpp branch
-        id: gcpp
-        run: |
-          $b = "4.3"
-          try {
-            $refs = git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD 2>$null
-            $line = ($refs | Where-Object { $_ -match "^ref:" })
-            if ($line) { $b = ($line -split "/")[-1].Trim() }
-          } catch {}
-          "branch=$b" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
+      # Use a pinned tag instead of dynamic branch detection —
+      # git ls-remote parsing is unreliable on Windows PowerShell.
       - name: Cache godot-cpp
         id: cache_gcpp
         uses: actions/cache@v4
         with:
           path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-${{ steps.gcpp.outputs.branch }}-v1
+          key: godot-cpp-windows-4.3-stable-v1
 
-      - name: Fetch godot-cpp
+      - name: Fetch godot-cpp (4.3-stable)
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
         run: |
-          $b    = "${{ steps.gcpp.outputs.branch }}"
           $dest = "$env:PLUGIN_DIR\godot-cpp"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$b.zip"
+          # Use the stable tag zip — reliable, no branch detection needed
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.3-stable.zip"
           Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
           Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
           $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
