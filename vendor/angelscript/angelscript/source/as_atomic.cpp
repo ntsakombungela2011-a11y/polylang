@@ -113,7 +113,7 @@ int asAtomicDec(int &value)
 #elif defined(AS_WIN)
 
 END_AS_NAMESPACE
-#define WIN32_MEAN_AND_LEAN
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 BEGIN_AS_NAMESPACE
 
@@ -176,4 +176,3 @@ int ERROR_PleaseFixTheConfig[-1];
 #endif
 
 END_AS_NAMESPACE
-

@@ -528,8 +528,7 @@
 
 	#if defined(_M_ARM64)
 		#define AS_ARM64
-
-		// TODO: MORE HERE
+		#define AS_MAX_PORTABILITY
 	#endif
 
 	#ifndef COMPLEX_MASK
