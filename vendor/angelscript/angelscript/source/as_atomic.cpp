@@ -119,13 +119,12 @@ BEGIN_AS_NAMESPACE
 
 int asAtomicInc(int &value)
 {
-	return InterlockedIncrement((LONG*)&value);
+	return InterlockedIncrement((volatile LONG*)&value);
 }
 
 int asAtomicDec(int &value)
 {
-	asASSERT(value > 0);
-	return InterlockedDecrement((LONG*)&value);
+	return InterlockedDecrement((volatile LONG*)&value);
 }
 
 #elif defined(AS_LINUX) || defined(AS_BSD) || defined(AS_ILLUMOS) || defined(AS_ANDROID)
