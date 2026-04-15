@@ -261,7 +261,17 @@ jobs:
           }
 
       - name: Build (Windows x64)
-        run: cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel
+        id: build
+        continue-on-error: true
+        run: |
+          $log = "$env:GITHUB_WORKSPACE\build-windows.log"
+          if (Test-Path $log) { Remove-Item $log -Force }
+          cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel 2>&1 | Tee-Object -FilePath $log
+          $rc = $LASTEXITCODE
+          if ($rc -ne 0) {
+            Write-Host "Build failed with exit code $rc"
+            exit $rc
+          }
 
       # ── Package ───────────────────────────────────────────────────────────
       - name: Package
@@ -296,6 +306,14 @@ jobs:
       - name: Causinator 9000 CI Diagnosis
         if: failure()
         uses: sylvainsf/causinator9000@v1.6.0
+
+      - name: Upload Windows build log
+        if: steps.build.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-log
+          path: build-windows.log
+          retention-days: 7
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
