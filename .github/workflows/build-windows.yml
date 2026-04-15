@@ -185,23 +185,23 @@ jobs:
           $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
-            -S $s `
-            -B $b `
+            -S "$s" `
+            -B "$b" `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
-            -DGODOT_CPP_GEN_INCLUDE="$b/godot-cpp/gen/include" `
-            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include/lua5.4" `
-            -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua5.4.lib" `
-            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
-            -DQUICKJS_LIB="$env:VENDOR_INSTALL/lib/quickjs.lib" `
-            -DWREN_INC="$env:VENDOR_INSTALL/include" `
-            -DWREN_LIB="$env:VENDOR_INSTALL/lib/wren.lib" `
-            -DSQUIRREL_INC="$env:VENDOR_INSTALL/include" `
-            -DSQUIRREL_LIB="$env:VENDOR_INSTALL/lib/squirrel.lib" `
-            -DAS_INC="$env:VENDOR_INSTALL/include" `
-            -DAS_LIB="$env:VENDOR_INSTALL/lib/angelscript.lib" `
+            -DGODOT_CPP_GEN_INCLUDE="${b}\godot-cpp\gen\include" `
+            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL\include\lua5.4" `
+            -DLUA_LIBRARIES="$env:VENDOR_INSTALL\lib\lua5.4.lib" `
+            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL\include" `
+            -DQUICKJS_LIB="$env:VENDOR_INSTALL\lib\quickjs.lib" `
+            -DWREN_INC="$env:VENDOR_INSTALL\include" `
+            -DWREN_LIB="$env:VENDOR_INSTALL\lib\wren.lib" `
+            -DSQUIRREL_INC="$env:VENDOR_INSTALL\include" `
+            -DSQUIRREL_LIB="$env:VENDOR_INSTALL\lib\squirrel.lib" `
+            -DAS_INC="$env:VENDOR_INSTALL\include" `
+            -DAS_LIB="$env:VENDOR_INSTALL\lib\angelscript.lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
             -DPOLYLANG_BUILD_ODIN_TESTS=OFF
