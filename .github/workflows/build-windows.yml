@@ -179,6 +179,23 @@ jobs:
             Write-Host "Generated headers present: $genHeaders"
           }
 
+      - name: Detect Visual Studio (or fallback)
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $gen = "Ninja"
+          if (Test-Path $vswhere) {
+            $ver = & $vswhere -latest -products * -property installationVersion -nologo 2>$null
+            if ($ver) {
+              $major = $ver.Split('.')[0]
+              if ($major -eq '17') { $gen = 'Visual Studio 17 2022' }
+              elseif ($major -eq '16') { $gen = 'Visual Studio 16 2019' }
+            }
+          } else {
+            Write-Host "vswhere not found; falling back to Ninja generator"
+          }
+          Write-Host "Using CMake generator: $gen"
+          "CMAKE_GENERATOR=$gen" >> $env:GITHUB_ENV
+
       - name: Configure (Windows x64)
         run: |
           $s = "$env:PLUGIN_DIR"
@@ -192,7 +209,7 @@ jobs:
           $cmakeArgs = @(
             "-S `"$s`"",
             "-B `"$b`"",
-            "-G `"Visual Studio 17 2022`"",
+            "-G `"$env:CMAKE_GENERATOR`"",
             "-A x64",
             "-DCMAKE_BUILD_TYPE=Release",
             "-DCMAKE_PREFIX_PATH=`"$vendor`"",
