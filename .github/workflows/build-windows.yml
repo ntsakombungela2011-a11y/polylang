@@ -107,12 +107,17 @@ jobs:
         run: |
           Write-Host "Detecting generator for vendored build..."
           $help = cmake --help 2>&1
-          $gen = 'Ninja'
-          # Prefer Ninja if available
-          if (Get-Command ninja -ErrorAction SilentlyContinue) { $gen = 'Ninja' }
-          elseif ($help -match 'Visual Studio 17 2022') { $gen = 'Visual Studio 17 2022' }
-          elseif ($help -match 'Visual Studio 16 2019') { $gen = 'Visual Studio 16 2019' }
-          Write-Host "Selected generator: $gen"
+          $primaryGen = 'NMake Makefiles'
+          # Try to detect a better generator if available
+          if (Get-Command ninja -ErrorAction SilentlyContinue) { $primaryGen = 'Ninja Multi-Config' }
+          elseif ($help -match 'Visual Studio 17 2022') { $primaryGen = 'Visual Studio 17 2022' }
+          elseif ($help -match 'Visual Studio 16 2019') { $primaryGen = 'Visual Studio 16 2019' }
+
+          # Generators to try in order (primary, fallback 1, fallback 2, final)
+          $generators = @($primaryGen, 'Ninja Multi-Config', 'NMake Makefiles')
+          if ($primaryGen -eq 'NMake Makefiles') {
+            $generators = @('NMake Makefiles')
+          }
 
           $configure = {
             param($g)
@@ -124,20 +129,27 @@ jobs:
               "-DCMAKE_INSTALL_PREFIX=`"$env:VENDOR_INSTALL`""
             )
             if ($g -match 'Visual Studio') { $a += '-A x64' }
-            Write-Host "Running: cmake $a"
-            cmake $a
+            Write-Host "Trying generator: $g"
+            cmake $a 2>&1 | Out-String | ForEach-Object { if ($_ -match 'Error') { Write-Host "  ERROR: $_" } }
             return $LASTEXITCODE
           }
 
-          $rc = & $configure $gen
-          if ($rc -ne 0) {
-            Write-Host "Generator $gen failed with exit code $rc; falling back to Ninja"
+          $success = $false
+          foreach ($gen in $generators) {
             if (Test-Path 'vendor\build-windows') { Remove-Item 'vendor\build-windows' -Recurse -Force }
-            $rc = & $configure 'Ninja'
-            if ($rc -ne 0) {
-              Write-Host "Fallback to Ninja also failed with exit code $rc"
-              exit $rc
+            $rc = & $configure $gen
+            if ($rc -eq 0) {
+              Write-Host "Generator $gen succeeded"
+              $success = $true
+              break
+            } else {
+              Write-Host "Generator $gen failed with exit code $rc; trying next..."
             }
+          }
+
+          if (-not $success) {
+            Write-Host "All generators failed"
+            exit 1
           }
 
           cmake --build vendor\build-windows --config Release --parallel
@@ -223,13 +235,15 @@ jobs:
         run: |
           Write-Host "Detecting available CMake generators..."
           $help = cmake --help 2>&1
-          $gen = 'Ninja'
+          # Use NMake Makefiles as safe default (works everywhere)
+          $gen = 'NMake Makefiles'
+          # Prefer better generators if available
           if ($help -match 'Visual Studio 17 2022') { $gen = 'Visual Studio 17 2022' }
           elseif ($help -match 'Visual Studio 16 2019') { $gen = 'Visual Studio 16 2019' }
           elseif ($help -match 'Ninja') { $gen = 'Ninja' }
           Write-Host "CMake reported generators include:"
-          $help | Select-String -Pattern 'Visual Studio|Ninja' | ForEach-Object { Write-Host "  $_" }
-          Write-Host "Selected generator: $gen"
+          $help | Select-String -Pattern 'Visual Studio|Ninja|NMake' | ForEach-Object { Write-Host "  $_" }
+          Write-Host "Selected default generator: $gen"
           "CMAKE_GENERATOR=$gen" >> $env:GITHUB_ENV
           if ($gen -match 'Visual Studio') { "CMAKE_USE_VS=true" >> $env:GITHUB_ENV } else { "CMAKE_USE_VS=false" >> $env:GITHUB_ENV }
 
@@ -297,7 +311,35 @@ jobs:
           Write-Host "Configuring with flags:"
           $cmakeArgs | ForEach-Object { Write-Host "  $_" }
 
-          cmake $cmakeArgs
+          # Try primary generator; fall back to alternatives if it fails
+          $primaryGen = $env:CMAKE_GENERATOR
+          $generators = @($primaryGen, 'Ninja Multi-Config', 'NMake Makefiles')
+          $success = $false
+
+          foreach ($gen in $generators) {
+            # Replace generator in args
+            $args = $cmakeArgs -replace '-G "[^"]*"', ('-G "' + $gen + '"')
+            # Remove -A x64 for non-VS generators
+            if ($gen -notmatch 'Visual Studio') {
+              $args = $args | Where-Object { $_ -ne '-A x64' }
+            }
+
+            Write-Host "Attempting configure with generator: $gen"
+            cmake $args
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Configure succeeded with $gen"
+              $success = $true
+              break
+            } else {
+              Write-Host "Configure failed with $gen; trying next generator..."
+              if (Test-Path $b) { Remove-Item $b -Recurse -Force }
+            }
+          }
+
+          if (-not $success) {
+            Write-Host "All generators failed to configure polylang"
+            exit 1
+          }
 
       - name: Windows diagnostic — list vendor and godot-cpp files
         run: |
