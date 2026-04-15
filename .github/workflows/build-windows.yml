@@ -184,27 +184,81 @@ jobs:
           $s = "$env:PLUGIN_DIR"
           $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
           New-Item -ItemType Directory -Force -Path $b | Out-Null
-          cmake `
-            -S "$s" `
-            -B "$b" `
-            -G "Visual Studio 17 2022" `
-            -A x64 `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
-            -DGODOT_CPP_GEN_INCLUDE="${b}\godot-cpp\gen\include" `
-            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL\include\lua5.4" `
-            -DLUA_LIBRARIES="$env:VENDOR_INSTALL\lib\lua5.4.lib" `
-            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL\include" `
-            -DQUICKJS_LIB="$env:VENDOR_INSTALL\lib\quickjs.lib" `
-            -DWREN_INC="$env:VENDOR_INSTALL\include" `
-            -DWREN_LIB="$env:VENDOR_INSTALL\lib\wren.lib" `
-            -DSQUIRREL_INC="$env:VENDOR_INSTALL\include" `
-            -DSQUIRREL_LIB="$env:VENDOR_INSTALL\lib\squirrel.lib" `
-            -DAS_INC="$env:VENDOR_INSTALL\include" `
-            -DAS_LIB="$env:VENDOR_INSTALL\lib\angelscript.lib" `
-            -DPL_ENABLE_HARDENING=OFF `
-            -DPOLYLANG_BUILD_TESTS=OFF `
-            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
+
+          # Build optional vendor flags only when vendor files actually exist to
+          # avoid passing non-existent .lib paths to CMake which evaluate as
+          # "truthy" and force adapter builds that will fail at link time.
+          $vendor = "$env:VENDOR_INSTALL"
+          $cmakeArgs = @(
+            "-S `"$s`"",
+            "-B `"$b`"",
+            "-G `"Visual Studio 17 2022`"",
+            "-A x64",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCMAKE_PREFIX_PATH=`"$vendor`"",
+            "-DGODOT_CPP_GEN_INCLUDE=`"${b}\godot-cpp\gen\include`"",
+            "-DPL_ENABLE_HARDENING=OFF",
+            "-DPOLYLANG_BUILD_TESTS=OFF",
+            "-DPOLYLANG_BUILD_ODIN_TESTS=OFF"
+          )
+
+          if (Test-Path "$vendor\include\quickjs\quickjs.h") {
+            $cmakeArgs += "-DQUICKJS_INCLUDE=`"$vendor\include`""
+          }
+          if (Test-Path "$vendor\lib\quickjs.lib") {
+            $cmakeArgs += "-DQUICKJS_LIB=`"$vendor\lib\quickjs.lib`""
+          }
+
+          if (Test-Path "$vendor\include\wren.h") {
+            $cmakeArgs += "-DWREN_INC=`"$vendor\include`""
+          }
+          if (Test-Path "$vendor\lib\wren.lib") {
+            $cmakeArgs += "-DWREN_LIB=`"$vendor\lib\wren.lib`""
+          }
+
+          if (Test-Path "$vendor\include\squirrel.h") {
+            $cmakeArgs += "-DSQUIRREL_INC=`"$vendor\include`""
+          }
+          if (Test-Path "$vendor\lib\squirrel.lib") {
+            $cmakeArgs += "-DSQUIRREL_LIB=`"$vendor\lib\squirrel.lib`""
+          }
+
+          if (Test-Path "$vendor\include\angelscript.h") {
+            $cmakeArgs += "-DAS_INC=`"$vendor\include`""
+          }
+          if (Test-Path "$vendor\lib\angelscript.lib") {
+            $cmakeArgs += "-DAS_LIB=`"$vendor\lib\angelscript.lib`""
+          }
+
+          if (Test-Path "$vendor\include\lua5.4\lua.h") {
+            $cmakeArgs += "-DLUA_INCLUDE_DIR=`"$vendor\include\lua5.4`""
+          }
+          if (Test-Path "$vendor\lib\lua5.4.lib") {
+            $cmakeArgs += "-DLUA_LIBRARIES=`"$vendor\lib\lua5.4.lib`""
+          }
+
+          Write-Host "Configuring with flags:"
+          $cmakeArgs | ForEach-Object { Write-Host "  $_" }
+
+          cmake $cmakeArgs
+
+      - name: Windows diagnostic — list vendor and godot-cpp files
+        run: |
+          Write-Host "-- VENDOR_INSTALL: $env:VENDOR_INSTALL"
+          if (Test-Path $env:VENDOR_INSTALL) {
+            Get-ChildItem $env:VENDOR_INSTALL -Recurse | Select-Object FullName
+          } else {
+            Write-Host "VENDOR_INSTALL directory not found"
+          }
+
+          $g = "$env:PLUGIN_DIR\godot-cpp"
+          Write-Host "-- godot-cpp dir: $g"
+          if (Test-Path $g) {
+            Get-ChildItem $g -Recurse | Select-Object FullName
+            if (Test-Path "$g\CMakeLists.txt") { Get-Content "$g\CMakeLists.txt" -TotalCount 20 }
+          } else {
+            Write-Host "godot-cpp directory not found"
+          }
 
       - name: Build (Windows x64)
         run: cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel
