@@ -102,18 +102,36 @@ jobs:
           elseif ($help -match 'Visual Studio 16 2019') { $gen = 'Visual Studio 16 2019' }
           Write-Host "Selected generator: $gen"
 
-          $args = @(
-            "-S vendor",
-            "-B vendor\build-windows",
-            "-G `"$gen`"",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DCMAKE_INSTALL_PREFIX=`"$env:VENDOR_INSTALL`""
-          )
-          if ($gen -match 'Visual Studio') { $args += '-A x64' }
+          $configure = {
+            param($g)
+            $a = @(
+              "-S vendor",
+              "-B vendor\build-windows",
+              "-G `"$g`"",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=`"$env:VENDOR_INSTALL`""
+            )
+            if ($g -match 'Visual Studio') { $a += '-A x64' }
+            Write-Host "Running: cmake $a"
+            cmake $a
+            return $LASTEXITCODE
+          }
 
-          cmake $args
+          $rc = & $configure $gen
+          if ($rc -ne 0) {
+            Write-Host "Generator $gen failed with exit code $rc; falling back to Ninja"
+            if (Test-Path 'vendor\build-windows') { Remove-Item 'vendor\build-windows' -Recurse -Force }
+            $rc = & $configure 'Ninja'
+            if ($rc -ne 0) {
+              Write-Host "Fallback to Ninja also failed with exit code $rc"
+              exit $rc
+            }
+          }
+
           cmake --build vendor\build-windows --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --install vendor\build-windows --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # ── Rust adapter ─────────────────────────────────────────────────────
       - name: Cache Rust (Windows)
