@@ -68,6 +68,16 @@ jobs:
           path: vendor\install-windows
           key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v2
 
+      - name: Ensure Ninja is available
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            Write-Host "Ninja not found; installing via choco"
+            choco install ninja -y
+          } else {
+            Write-Host "Ninja already installed"
+          }
+          ninja --version
+
       - name: Verify vendored deps (Windows)
         id: verify_vendor
         run: |
@@ -98,7 +108,9 @@ jobs:
           Write-Host "Detecting generator for vendored build..."
           $help = cmake --help 2>&1
           $gen = 'Ninja'
-          if ($help -match 'Visual Studio 17 2022') { $gen = 'Visual Studio 17 2022' }
+          # Prefer Ninja if available
+          if (Get-Command ninja -ErrorAction SilentlyContinue) { $gen = 'Ninja' }
+          elseif ($help -match 'Visual Studio 17 2022') { $gen = 'Visual Studio 17 2022' }
           elseif ($help -match 'Visual Studio 16 2019') { $gen = 'Visual Studio 16 2019' }
           Write-Host "Selected generator: $gen"
 
