@@ -29,6 +29,11 @@
 #include <string.h>
 #include <inttypes.h>
 
+/* MSVC pragma pack for struct packing (GCC uses __attribute__((packed))) */
+#ifdef _MSC_VER
+#define PACKED_STRUCT(x) __pragma(pack(push, 1)) x __pragma(pack(pop))
+#endif
+
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 #define force_inline inline __attribute__((always_inline))
@@ -149,17 +154,29 @@ static inline int ctz64(uint64_t a)
     return __builtin_ctzll(a);
 }
 
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+struct packed_u64 {
+    uint64_t v;
+};
+struct packed_u32 {
+    uint32_t v;
+};
+struct packed_u16 {
+    uint16_t v;
+};
+#pragma pack(pop)
+#else
 struct __attribute__((packed)) packed_u64 {
     uint64_t v;
 };
-
 struct __attribute__((packed)) packed_u32 {
     uint32_t v;
 };
-
 struct __attribute__((packed)) packed_u16 {
     uint16_t v;
 };
+#endif
 
 static inline uint64_t get_u64(const uint8_t *tab)
 {

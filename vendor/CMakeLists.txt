@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(polylang_vendor LANGUAGES C CXX)
+project(polylang_vendor LANGUAGES C CXX ASM)
 
 # Builds all vendored C/C++ deps from their committed source trees
 # into CMAKE_INSTALL_PREFIX so the main build can find them via
@@ -55,7 +55,8 @@ target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="vendored" _GNU_SOURCE
 # MSVC does not expose NAN from <stdio.h>/<stdint.h> — quickjs.h needs it via <math.h>.
 # Define _USE_MATH_DEFINES so that <math.h> exposes NAN/M_PI etc. on MSVC.
 if(MSVC)
-    target_compile_definitions(quickjs PUBLIC _USE_MATH_DEFINES)
+    target_compile_definitions(quickjs PUBLIC _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
+    target_link_libraries(quickjs PRIVATE ws2_32)
 endif()
 set_target_properties(quickjs PROPERTIES C_STANDARD 11)
 if(UNIX)
@@ -110,14 +111,22 @@ file(GLOB AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source
 # AngelScript arm64 native calls require assembly (.S) files not included
 # in the vendor zip. Build STATIC on Android (no native call thunks needed
 # at link time — they're resolved at runtime via the JIT). Build SHARED on
-# desktop where the x64 .S file ships as part of the SDK.
+# desktop where the x64 assembly file ships as part of the SDK.
 if(ANDROID)
     set(AS_LIB_TYPE STATIC)
+    set(AS_SOURCES_WITH_ASM ${AS_SOURCES})
 else()
     set(AS_LIB_TYPE SHARED)
+    set(AS_SOURCES_WITH_ASM ${AS_SOURCES})
+    
+    # Include MSVC x64 assembly for native calling conventions
+    if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        enable_language(ASM_MASM)
+        list(APPEND AS_SOURCES_WITH_ASM "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_x64_msvc_asm.asm")
+    endif()
 endif()
 
-add_library(angelscript ${AS_LIB_TYPE} ${AS_SOURCES})
+add_library(angelscript ${AS_LIB_TYPE} ${AS_SOURCES_WITH_ASM})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
     $<INSTALL_INTERFACE:include>)

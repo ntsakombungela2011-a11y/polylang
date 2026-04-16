@@ -28,15 +28,21 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
+#if !defined(_WIN32)
 #include <unistd.h>
+#endif
 #include <errno.h>
+#if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/time.h>
+#endif
 #include <time.h>
+#if !defined(_WIN32)
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
