@@ -184,6 +184,12 @@ if(QUICKJS_LIB AND QUICKJS_INCLUDE)
     pl_adapter(polylang_adapter_ts  adapters/typescript/polylang_ts_adapter.cpp)
     target_link_libraries(polylang_adapter_ts  PRIVATE ${QUICKJS_LIB})
     target_include_directories(polylang_adapter_ts  PRIVATE ${QUICKJS_INCLUDE})
+    # MSVC: quickjs.h uses NAN (via JS_FLOAT64_NAN) but only includes <stdio.h>.
+    # _USE_MATH_DEFINES makes <math.h>/<cmath> expose NAN/M_PI on MSVC.
+    if(MSVC)
+        target_compile_definitions(polylang_adapter_js PRIVATE _USE_MATH_DEFINES)
+        target_compile_definitions(polylang_adapter_ts PRIVATE _USE_MATH_DEFINES)
+    endif()
     message(STATUS "JS/TS (QuickJS): ENABLED")
 else()
     message(STATUS "QuickJS: NOT FOUND — JS/TS skipped")

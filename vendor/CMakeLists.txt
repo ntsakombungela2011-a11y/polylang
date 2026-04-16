@@ -31,7 +31,10 @@ elseif(UNIX)
     target_compile_definitions(lua54 PRIVATE LUA_USE_LINUX)
     target_link_libraries(lua54 PRIVATE m dl)
 endif()
-install(TARGETS lua54 LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(TARGETS lua54
+    RUNTIME DESTINATION lib   # Windows: installs lua5.4.dll
+    LIBRARY DESTINATION lib   # Linux/Android: installs .so
+    ARCHIVE DESTINATION lib)  # Windows: installs lua5.4.lib import lib
 install(FILES
     lua/src/lua.h lua/src/luaconf.h lua/src/lualib.h
     lua/src/lauxlib.h lua/src/lua.hpp
@@ -49,11 +52,19 @@ target_include_directories(quickjs PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/quickjs>
     $<INSTALL_INTERFACE:include/quickjs>)
 target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="vendored" _GNU_SOURCE)
+# MSVC does not expose NAN from <stdio.h>/<stdint.h> — quickjs.h needs it via <math.h>.
+# Define _USE_MATH_DEFINES so that <math.h> exposes NAN/M_PI etc. on MSVC.
+if(MSVC)
+    target_compile_definitions(quickjs PUBLIC _USE_MATH_DEFINES)
+endif()
 set_target_properties(quickjs PROPERTIES C_STANDARD 11)
 if(UNIX)
     target_link_libraries(quickjs PRIVATE m)
 endif()
-install(TARGETS quickjs LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(TARGETS quickjs
+    RUNTIME DESTINATION lib   # Windows: installs quickjs.dll
+    LIBRARY DESTINATION lib   # Linux/Android: installs .so
+    ARCHIVE DESTINATION lib)  # Windows: installs quickjs.lib import lib
 install(FILES quickjs/quickjs.h quickjs/quickjs-libc.h DESTINATION include/quickjs)
 
 # ── Wren ──────────────────────────────────────────────────────────────────────
@@ -72,7 +83,10 @@ target_include_directories(wren PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wren/src/vm>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wren/src/optional>
     $<INSTALL_INTERFACE:include>)
-install(TARGETS wren LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(TARGETS wren
+    RUNTIME DESTINATION lib   # Windows: installs wren.dll
+    LIBRARY DESTINATION lib   # Linux/Android: installs .so
+    ARCHIVE DESTINATION lib)  # Windows: installs wren.lib import lib
 install(FILES wren/src/include/wren.h DESTINATION include)
 
 # ── Squirrel ──────────────────────────────────────────────────────────────────
@@ -84,7 +98,10 @@ target_include_directories(squirrel PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/squirrel/include>
     $<INSTALL_INTERFACE:include>)
 set_target_properties(squirrel PROPERTIES CXX_STANDARD 14)
-install(TARGETS squirrel LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(TARGETS squirrel
+    RUNTIME DESTINATION lib   # Windows: installs squirrel.dll
+    LIBRARY DESTINATION lib   # Linux/Android: installs .so
+    ARCHIVE DESTINATION lib)  # Windows: installs squirrel.lib import lib
 install(DIRECTORY squirrel/include/ DESTINATION include)
 
 # ── AngelScript ───────────────────────────────────────────────────────────────
@@ -108,7 +125,10 @@ set_target_properties(angelscript PROPERTIES CXX_STANDARD 11 POSITION_INDEPENDEN
 if(MSVC)
     target_compile_options(angelscript PRIVATE /EHsc)
 endif()
-install(TARGETS angelscript LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(TARGETS angelscript
+    RUNTIME DESTINATION lib   # Windows: installs angelscript.dll
+    LIBRARY DESTINATION lib   # Linux/Android: installs .so
+    ARCHIVE DESTINATION lib)  # Windows: installs angelscript.lib import lib
 install(DIRECTORY angelscript/angelscript/include/ DESTINATION include)
 
 # ── AngelScript add-ons (scriptstdstring, scriptarray) ────────────────────────
@@ -135,6 +155,7 @@ set_target_properties(as_scriptarray PROPERTIES
     CXX_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
 
 install(TARGETS as_scriptstdstring as_scriptarray
+    RUNTIME DESTINATION lib
     LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 # Install add-on headers into named subdirs matching the #include paths
 install(FILES ${AS_ADDONS}/scriptstdstring/scriptstdstring.h
