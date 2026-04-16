@@ -46,7 +46,7 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
-#include <utime.h>
+#include <sys/utime.h>
 #else
 #include <dlfcn.h>
 #include <termios.h>

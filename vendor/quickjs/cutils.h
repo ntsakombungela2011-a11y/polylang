@@ -34,11 +34,22 @@
 #define PACKED_STRUCT(x) __pragma(pack(push, 1)) x __pragma(pack(pop))
 #endif
 
+/* Platform-specific macros */
+#ifdef _MSC_VER
+/* MSVC */
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+#define force_inline    __forceinline
+#define no_inline       __declspec(noinline)
+#define __maybe_unused  
+#else
+/* GCC/Clang */
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 #define force_inline inline __attribute__((always_inline))
 #define no_inline __attribute__((noinline))
 #define __maybe_unused __attribute__((unused))
+#endif
 
 #define xglue(x, y) x ## y
 #define glue(x, y) xglue(x, y)
@@ -333,8 +344,12 @@ static inline int dbuf_put_u64(DynBuf *s, uint64_t val)
     }
 }
 
+#ifndef _MSC_VER
 int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s,
                                                       const char *fmt, ...);
+#else
+int dbuf_printf(DynBuf *s, const char *fmt, ...);
+#endif
 void dbuf_free(DynBuf *s);
 static inline BOOL dbuf_error(DynBuf *s) {
     return s->error;

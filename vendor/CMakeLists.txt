@@ -55,6 +55,7 @@ target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="vendored" _GNU_SOURCE
 # MSVC does not expose NAN from <stdio.h>/<stdint.h> — quickjs.h needs it via <math.h>.
 # Define _USE_MATH_DEFINES so that <math.h> exposes NAN/M_PI etc. on MSVC.
 if(MSVC)
+    target_compile_definitions(quickjs PRIVATE JS_NAN_BOXING)
     target_compile_definitions(quickjs PUBLIC _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(quickjs PRIVATE ws2_32)
 endif()
@@ -132,7 +133,8 @@ target_include_directories(angelscript PUBLIC
     $<INSTALL_INTERFACE:include>)
 set_target_properties(angelscript PROPERTIES CXX_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
-    target_compile_options(angelscript PRIVATE /EHsc)
+    # Only apply C++ exception handling to .cpp files, not to MASM .asm files
+    target_compile_options(angelscript PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/EHsc>)
 endif()
 install(TARGETS angelscript
     RUNTIME DESTINATION lib   # Windows: installs angelscript.dll
