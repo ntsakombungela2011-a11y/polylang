@@ -433,10 +433,9 @@
 		#pragma warning( disable : 4786 )
 	#endif
 
-	#if defined(_M_X64) || defined(_M_ARM64)
+	#ifdef _M_X64
 		#define MULTI_BASE_OFFSET(x) (*((asDWORD*)(&x)+2))
 		#define VIRTUAL_BASE_OFFSET(x) (*((asDWORD*)(&x)+4))
-		#define AS_64BIT_PTR
 	#else
 		#define MULTI_BASE_OFFSET(x) (*((asDWORD*)(&x)+1))
 		#define VIRTUAL_BASE_OFFSET(x) (*((asDWORD*)(&x)+3))
@@ -529,10 +528,8 @@
 
 	#if defined(_M_ARM64)
 		#define AS_ARM64
-		#define AS_MAX_PORTABILITY
-		#define AS_CALLEE_DESTROY_OBJ_BY_VAL
-		#define AS_LARGE_OBJS_PASSED_BY_REF
-		#define AS_LARGE_OBJ_MIN_SIZE 3
+
+		// TODO: MORE HERE
 	#endif
 
 	#ifndef COMPLEX_MASK

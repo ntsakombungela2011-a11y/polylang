@@ -28,11 +28,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#if defined(_WIN32)
-#include <winsock2.h>  /* for timeval on Windows */
-#else
 #include <sys/time.h>
-#endif
 #include <time.h>
 #include <fenv.h>
 #include <math.h>
@@ -116,9 +112,7 @@
 //#define FORCE_GC_AT_MALLOC
 
 #ifdef CONFIG_ATOMICS
-#if !defined(_WIN32)
 #include <pthread.h>
-#endif
 #include <stdatomic.h>
 #include <errno.h>
 #endif

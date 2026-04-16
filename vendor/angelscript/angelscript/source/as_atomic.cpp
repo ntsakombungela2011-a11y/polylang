@@ -113,18 +113,19 @@ int asAtomicDec(int &value)
 #elif defined(AS_WIN)
 
 END_AS_NAMESPACE
-#define WIN32_LEAN_AND_MEAN
+#define WIN32_MEAN_AND_LEAN
 #include <windows.h>
 BEGIN_AS_NAMESPACE
 
 int asAtomicInc(int &value)
 {
-	return InterlockedIncrement((volatile LONG*)&value);
+	return InterlockedIncrement((LONG*)&value);
 }
 
 int asAtomicDec(int &value)
 {
-	return InterlockedDecrement((volatile LONG*)&value);
+	asASSERT(value > 0);
+	return InterlockedDecrement((LONG*)&value);
 }
 
 #elif defined(AS_LINUX) || defined(AS_BSD) || defined(AS_ILLUMOS) || defined(AS_ANDROID)
@@ -175,3 +176,4 @@ int ERROR_PleaseFixTheConfig[-1];
 #endif
 
 END_AS_NAMESPACE
+
