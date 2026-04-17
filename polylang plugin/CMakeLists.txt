@@ -71,6 +71,25 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp/CMakeLists.txt")
 endif()
 add_subdirectory(godot-cpp)
 
+# Ensure godot-cpp generated headers (gen/include) are visible to the plugin
+# Some CI runs build godot-cpp into the build tree, producing gen/include under the build dir.
+find_path(GODOT_CPP_GEN_INCLUDE
+    NAMES godot_cpp/core/gdextension_interface_loader.hpp
+    PATHS
+        "${CMAKE_BINARY_DIR}/godot-cpp/gen/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp/gen/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/build_windows/godot-cpp/gen/include"
+        "${CMAKE_SOURCE_DIR}/build_windows/godot-cpp/gen/include"
+        "${CMAKE_SOURCE_DIR}/godot-cpp/gen/include"
+    NO_DEFAULT_PATH
+)
+if(GODOT_CPP_GEN_INCLUDE)
+    target_include_directories(polylang PRIVATE ${GODOT_CPP_GEN_INCLUDE})
+    message(STATUS "Found godot-cpp generated headers: ${GODOT_CPP_GEN_INCLUDE}")
+else()
+    message(WARNING "godot-cpp generated headers not found (godot_cpp/core/gdextension_interface_loader.hpp). If build fails, ensure godot-cpp 'gen/include' is generated and accessible.")
+endif()
+
 # ── iOS requires static libs ──────────────────────────────────
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(PL_LIB_TYPE STATIC)
