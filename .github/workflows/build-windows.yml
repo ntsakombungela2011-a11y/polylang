@@ -93,7 +93,9 @@ jobs:
           }
 
       - name: Build vendored deps (Windows)
-        if: steps.cache_vendor.outputs.cache-hit != 'true' || steps.verify_vendor.outputs.vendor_ready != 'true'
+        # Always run vendored deps build to ensure required libraries
+        # are present for the plugin build. This avoids cache races
+        # where cache claims to be valid but artifacts are missing.
         run: |
           cmake `
             -S vendor `
