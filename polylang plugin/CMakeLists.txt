@@ -84,7 +84,7 @@ find_path(GODOT_CPP_GEN_INCLUDE
     NO_DEFAULT_PATH
 )
 if(GODOT_CPP_GEN_INCLUDE)
-    target_include_directories(polylang PRIVATE ${GODOT_CPP_GEN_INCLUDE})
+    set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${GODOT_CPP_GEN_INCLUDE})
     message(STATUS "Found godot-cpp generated headers: ${GODOT_CPP_GEN_INCLUDE}")
 else()
     message(WARNING "godot-cpp generated headers not found (godot_cpp/core/gdextension_interface_loader.hpp). If build fails, ensure godot-cpp 'gen/include' is generated and accessible.")
@@ -176,6 +176,11 @@ else()
         PREFIX ""
         POSITION_INDEPENDENT_CODE ON
     )
+endif()
+
+if(DEFINED POLYLANG_GODOT_CPP_GEN_INCLUDE)
+    target_include_directories(polylang PRIVATE ${POLYLANG_GODOT_CPP_GEN_INCLUDE})
+    message(STATUS "Added godot-cpp gen include to polylang: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
 endif()
 
 target_compile_definitions(polylang PRIVATE
