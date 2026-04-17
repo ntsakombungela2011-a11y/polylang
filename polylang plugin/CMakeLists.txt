@@ -84,8 +84,16 @@ find_path(GODOT_CPP_GEN_INCLUDE
     NO_DEFAULT_PATH
 )
 if(GODOT_CPP_GEN_INCLUDE)
-    set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${GODOT_CPP_GEN_INCLUDE})
-    message(STATUS "Found godot-cpp generated headers: ${GODOT_CPP_GEN_INCLUDE}")
+    # Convert to absolute real path to avoid issues with relative paths or spaces
+    file(REAL_PATH "${GODOT_CPP_GEN_INCLUDE}" POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL)
+    if(EXISTS "${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL}")
+        set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL})
+        message(STATUS "Found godot-cpp generated headers: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    else()
+        # Fall back to original if REAL_PATH failed
+        set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${GODOT_CPP_GEN_INCLUDE})
+        message(WARNING "Resolved godot-cpp gen include path does not exist: ${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL} — using original: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    endif()
 else()
     message(WARNING "godot-cpp generated headers not found (godot_cpp/core/gdextension_interface_loader.hpp). If build fails, ensure godot-cpp 'gen/include' is generated and accessible.")
 endif()
@@ -179,8 +187,13 @@ else()
 endif()
 
 if(DEFINED POLYLANG_GODOT_CPP_GEN_INCLUDE)
-    target_include_directories(polylang PRIVATE ${POLYLANG_GODOT_CPP_GEN_INCLUDE})
-    message(STATUS "Added godot-cpp gen include to polylang: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    # Ensure absolute path and existence before adding to target
+    if(EXISTS "${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+        target_include_directories(polylang PRIVATE "${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+        message(STATUS "Added godot-cpp gen include to polylang: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    else()
+        message(WARNING "POLYLANG_GODOT_CPP_GEN_INCLUDE set but directory does not exist: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    endif()
 endif()
 
 target_compile_definitions(polylang PRIVATE
