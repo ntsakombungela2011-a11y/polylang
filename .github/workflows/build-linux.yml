@@ -16,6 +16,9 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PLUGIN_DIR: "polylang plugin"
   BUILD_DIR:  build_linux
