@@ -74,7 +74,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua.lib",
+            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -183,8 +183,8 @@ jobs:
 
       - name: Configure (Windows x64)
         run: |
-          $s = "$env:PLUGIN_DIR"
-          $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          $s = "$env:GITHUB_WORKSPACE/$env:PLUGIN_DIR"
+          $b = "$env:GITHUB_WORKSPACE/$env:PLUGIN_DIR/$env:BUILD_DIR"
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
             -S $s `
@@ -195,8 +195,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
             -DGODOT_CPP_INCLUDE="$s/godot-cpp/include" `
             -DGODOT_CPP_GEN_INCLUDE="$b/godot-cpp/gen/include" `
-            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include" `
-            -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua.lib" `
+            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include/lua5.4" `
+            -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua5.4.lib" `
             -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
             -DQUICKJS_LIB="$env:VENDOR_INSTALL/lib/quickjs.lib" `
             -DWREN_INC="$env:VENDOR_INSTALL/include" `
