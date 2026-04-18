@@ -142,17 +142,20 @@ jobs:
           # Remove git metadata — it's vendored, not a submodule
           rm -rf "$DEST/.git"
 
-          # ── Create POSIX shims for Windows/MSVC ────────────────────────
+          # ── Create POSIX shims for Windows/MSVC ──────────────────────────
           # QuickJS's quickjs-libc.c requires several POSIX headers that are 
           # missing on Windows/MSVC. We provide minimal shims so it compiles.
+          SHIM_DIR="vendor/msvc_shim"
+          rm -rf "$SHIM_DIR" && mkdir -p "$SHIM_DIR"
           
           # 1. dirent.h (minimal implementation)
-          cat > "$DEST/dirent.h" <<'EOF'
+          cat > "$SHIM_DIR/dirent.h" <<'EOF'
 #ifndef MSVC_DIRENT_H
 #define MSVC_DIRENT_H
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -176,10 +179,11 @@ static inline int closedir(DIR *d) { FindClose(d->h); free(d); return 0; }
 EOF
 
           # 2. unistd.h
-          cat > "$DEST/unistd.h" <<'EOF'
+          cat > "$SHIM_DIR/unistd.h" <<'EOF'
 #ifndef MSVC_UNISTD_H
 #define MSVC_UNISTD_H
 #include <io.h>
+#include <winsock2.h>
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -194,8 +198,8 @@ static inline void usleep(unsigned int us) { Sleep(us / 1000); }
 EOF
 
           # 3. sys/time.h
-          mkdir -p "$DEST/sys"
-          cat > "$DEST/sys/time.h" <<'EOF'
+          mkdir -p "$SHIM_DIR/sys"
+          cat > "$SHIM_DIR/sys/time.h" <<'EOF'
 #ifndef MSVC_SYS_TIME_H
 #define MSVC_SYS_TIME_H
 #ifndef WIN32_LEAN_AND_MEAN
@@ -205,9 +209,9 @@ EOF
 #include <windows.h>
 #include <time.h>
 
-#ifndef _TIMEVAL_DEFINED
-#define _TIMEVAL_DEFINED
+#if !defined(_TIMEVAL_DEFINED) && !defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
 struct timeval { long tv_sec; long tv_usec; };
+#define _TIMEVAL_DEFINED
 #endif
 
 static inline int gettimeofday(struct timeval *tp, void *tzp) {
@@ -215,7 +219,7 @@ static inline int gettimeofday(struct timeval *tp, void *tzp) {
         FILETIME ft; unsigned __int64 t;
         GetSystemTimeAsFileTime(&ft);
         t = ((unsigned __int64)ft.dwHighDateTime << 32) | (unsigned __int64)ft.dwLowDateTime;
-        t -= 116444736000000000LL;
+        t -= 116444736000000000ULL;
         tp->tv_sec = (long)(t / 10000000ULL);
         tp->tv_usec = (long)((t % 10000000ULL) / 10ULL);
     }
@@ -225,7 +229,7 @@ static inline int gettimeofday(struct timeval *tp, void *tzp) {
 EOF
 
           # 4. sys/wait.h
-          cat > "$DEST/sys/wait.h" <<'EOF'
+          cat > "$SHIM_DIR/sys/wait.h" <<'EOF'
 #ifndef MSVC_SYS_WAIT_H
 #define MSVC_SYS_WAIT_H
 #define WIFEXITED(s) (1)
@@ -236,38 +240,46 @@ EOF
 EOF
 
           # 5. pthread.h
-          cat > "$DEST/pthread.h" <<'EOF'
+          cat > "$SHIM_DIR/pthread.h" <<'EOF'
 #ifndef MSVC_PTHREAD_H
 #define MSVC_PTHREAD_H
+#include <winsock2.h>
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 #include <time.h>
-#ifndef _TIMESPEC_DEFINED
+
+#if !defined(_TIMESPEC_DEFINED) && !defined(_STRUCT_TIMESPEC)
+struct timespec { long tv_sec; long tv_nsec; };
 #define _TIMESPEC_DEFINED
-struct timespec { time_t tv_sec; long tv_nsec; };
+#define _STRUCT_TIMESPEC
 #endif
+
 typedef void* pthread_t;
 typedef void* pthread_mutex_t;
 typedef void* pthread_cond_t;
 typedef void* pthread_attr_t;
 typedef void* pthread_mutexattr_t;
 typedef void* pthread_condattr_t;
+
 static inline int pthread_mutex_init(pthread_mutex_t* m, void* a) { return 0; }
 static inline int pthread_mutex_destroy(pthread_mutex_t* m) { return 0; }
 static inline int pthread_mutex_lock(pthread_mutex_t* m) { return 0; }
 static inline int pthread_mutex_unlock(pthread_mutex_t* m) { return 0; }
+
 static inline int pthread_cond_init(pthread_cond_t* c, void* a) { return 0; }
 static inline int pthread_cond_destroy(pthread_cond_t* c) { return 0; }
 static inline int pthread_cond_signal(pthread_cond_t* c) { return 0; }
 static inline int pthread_cond_broadcast(pthread_cond_t* c) { return 0; }
 static inline int pthread_cond_wait(pthread_cond_t* c, pthread_mutex_t* m) { return 0; }
+
 static inline int pthread_create(pthread_t* t, void* a, void* (*f)(void*), void* p) { return 0; }
 static inline int pthread_join(pthread_t t, void** r) { return 0; }
 #endif
 EOF
 
+          git add "$SHIM_DIR"
           echo "$TAG" > "$DEST/.vendor-version"
           git add "$DEST"
           echo "QuickJS $TAG vendored → $DEST"
