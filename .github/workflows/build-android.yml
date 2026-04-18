@@ -1,5 +1,8 @@
 name: PolyLang — Android
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, master]
