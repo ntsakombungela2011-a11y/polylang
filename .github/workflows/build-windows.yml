@@ -44,13 +44,13 @@ jobs:
         id: cache_gcpp
         uses: actions/cache@v4
         with:
-          path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-detected-v3
+          path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
+          key: godot-cpp-windows-detected-v4
 
       - name: Fetch godot-cpp
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
         run: |
-          $dest = Join-Path (Get-Location) "$env:PLUGIN_DIR\godot-cpp"
+          $dest = Join-Path "${{ github.workspace }}" "$env:PLUGIN_DIR\godot-cpp"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           # Detect default branch to match Linux logic and get required 4.4+ headers
           $branch = (git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | Select-String 'ref: refs/heads/(.*)\s+HEAD').Matches[0].Groups[1].Value
@@ -191,8 +191,8 @@ jobs:
           
           $gcpp_inc = "$s/godot-cpp/include"
           $gcpp_gen = "$b/godot-cpp/gen/include"
-          $lua_inc = "$vendor/include/lua5.4"
-          $lua_lib = Join-Path $env:VENDOR_INSTALL "lib\lua54.lib"
+          $lua_inc = "$vendor/include"
+          $lua_lib = "$vendor/lib/lua5.4.lib"
           
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
