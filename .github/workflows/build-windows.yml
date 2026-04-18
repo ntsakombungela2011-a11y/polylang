@@ -102,8 +102,8 @@ jobs:
           # Create shims for missing POSIX headers required by QuickJS on Windows/MSVC
           New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
           Set-Content -Path "vendor/msvc_shim/unistd.h" -Value "#include <io.h>`n#include <process.h>`n#define STDIN_FILENO 0`n#define STDOUT_FILENO 1`n#define STDERR_FILENO 2"
-          Set-Content -Path "vendor/msvc_shim/sys/time.h" -Value "struct timezone { int  tz_minuteswest; int  tz_dsttime; };"
-          Set-Content -Path "vendor/msvc_shim/pthread.h" -Value ""
+          Set-Content -Path "vendor/msvc_shim/sys/time.h" -Value "struct timeval { long tv_sec; long tv_usec; };`nstruct timezone { int  tz_minuteswest; int  tz_dsttime; };`nint gettimeofday(struct timeval *tv, struct timezone *tz);"
+          Set-Content -Path "vendor/msvc_shim/pthread.h" -Value "#include <windows.h>`ntypedef CRITICAL_SECTION pthread_mutex_t;`ntypedef CONDITION_VARIABLE pthread_cond_t;`ntypedef int pthread_t;`n#define PTHREAD_MUTEX_INITIALIZER {0}`n#define CLOCK_REALTIME 0`nstruct timespec { long tv_sec; long tv_nsec; };`nint clock_gettime(int clk_id, struct timespec *tp);`nint pthread_mutex_lock(pthread_mutex_t *m);`nint pthread_mutex_unlock(pthread_mutex_t *m);`nint pthread_cond_init(pthread_cond_t *c, void *a);`nint pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m);`nint pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m, const struct timespec *t);"
           Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
 
           cmake `
@@ -114,7 +114,7 @@ jobs:
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
-            -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32" `
+            -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h" `
             -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
           cmake --install vendor\build-windows --config Release
