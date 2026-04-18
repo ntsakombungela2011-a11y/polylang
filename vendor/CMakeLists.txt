@@ -20,7 +20,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # ── Lua 5.4 ──────────────────────────────────────────────────────────────────
 file(GLOB LUA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/lua/src/*.c")
 list(FILTER LUA_SOURCES EXCLUDE REGEX "(lua|luac)\\.c$")
-add_library(lua54 SHARED ${LUA_SOURCES})
+add_library(lua54 STATIC ${LUA_SOURCES})
 target_include_directories(lua54 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lua/src>
     $<INSTALL_INTERFACE:include/lua5.4>)
@@ -38,7 +38,7 @@ install(FILES
     DESTINATION include/lua5.4)
 
 # ── QuickJS ───────────────────────────────────────────────────────────────────
-add_library(quickjs SHARED
+add_library(quickjs STATIC
     quickjs/quickjs.c
     quickjs/quickjs-libc.c
     quickjs/libregexp.c
@@ -57,7 +57,7 @@ install(TARGETS quickjs LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(FILES quickjs/quickjs.h quickjs/quickjs-libc.h DESTINATION include/quickjs)
 
 # ── Wren ──────────────────────────────────────────────────────────────────────
-add_library(wren SHARED
+add_library(wren STATIC
     wren/src/vm/wren_compiler.c
     wren/src/vm/wren_core.c
     wren/src/vm/wren_debug.c
@@ -79,7 +79,7 @@ install(FILES wren/src/include/wren.h DESTINATION include)
 file(GLOB SQ_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/squirrel/squirrel/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/squirrel/sqstdlib/*.cpp")
-add_library(squirrel SHARED ${SQ_SOURCES})
+add_library(squirrel STATIC ${SQ_SOURCES})
 target_include_directories(squirrel PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/squirrel/include>
     $<INSTALL_INTERFACE:include>)
@@ -94,13 +94,7 @@ file(GLOB AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source
 # in the vendor zip. Build STATIC on Android (no native call thunks needed
 # at link time — they're resolved at runtime via the JIT). Build SHARED on
 # desktop where the x64 .S file ships as part of the SDK.
-if(ANDROID)
-    set(AS_LIB_TYPE STATIC)
-else()
-    set(AS_LIB_TYPE SHARED)
-endif()
-
-add_library(angelscript ${AS_LIB_TYPE} ${AS_SOURCES})
+add_library(angelscript STATIC ${AS_SOURCES})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
     $<INSTALL_INTERFACE:include>)

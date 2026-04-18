@@ -76,7 +76,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua54.lib",
+            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -191,8 +191,8 @@ jobs:
           
           $gcpp_inc = "$s/godot-cpp/include"
           $gcpp_gen = "$b/godot-cpp/gen/include"
-          $lua_inc = "$vendor/include"
-          $lua_lib = "$vendor/lib/lua54.lib"
+          $lua_inc = "$vendor/include/lua5.4"
+          $lua_lib = "$vendor/lib/lua5.4.lib"
           
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
