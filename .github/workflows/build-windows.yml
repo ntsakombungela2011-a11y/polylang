@@ -74,7 +74,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua.lib",
+            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -183,32 +183,35 @@ jobs:
 
       - name: Configure (Windows x64)
         run: |
-          $s = (Resolve-Path "$env:PLUGIN_DIR").Path
-          $b = Join-Path $s "$env:BUILD_DIR"
-          $gcpp_inc = Join-Path $s "godot-cpp\include"
-          $gcpp_gen = Join-Path $b "godot-cpp\gen\include"
-          $lua_inc = Join-Path $env:VENDOR_INSTALL "include"
-          $lua_lib = Join-Path $env:VENDOR_INSTALL "lib\lua.lib"
+          $s = (Resolve-Path "$env:PLUGIN_DIR").Path.Replace('\', '/')
+          $b = (Join-Path $s "$env:BUILD_DIR").Replace('\', '/')
+          $vendor = $env:VENDOR_INSTALL.Replace('\', '/')
+          
+          $gcpp_inc = "$s/godot-cpp/include"
+          $gcpp_gen = "$b/godot-cpp/gen/include"
+          $lua_inc = "$vendor/include/lua5.4"
+          $lua_lib = "$vendor/lib/lua5.4.lib"
+          
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
-            -S $s `
-            -B $b `
+            -S "$s" `
+            -B "$b" `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
+            -DCMAKE_PREFIX_PATH="$vendor" `
             -DGODOT_CPP_INCLUDE="$gcpp_inc" `
             -DGODOT_CPP_GEN_INCLUDE="$gcpp_gen" `
             -DLUA_INCLUDE_DIR="$lua_inc" `
             -DLUA_LIBRARIES="$lua_lib" `
-            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
-            -DQUICKJS_LIB="$env:VENDOR_INSTALL/lib/quickjs.lib" `
-            -DWREN_INC="$env:VENDOR_INSTALL/include" `
-            -DWREN_LIB="$env:VENDOR_INSTALL/lib/wren.lib" `
-            -DSQUIRREL_INC="$env:VENDOR_INSTALL/include" `
-            -DSQUIRREL_LIB="$env:VENDOR_INSTALL/lib/squirrel.lib" `
-            -DAS_INC="$env:VENDOR_INSTALL/include" `
-            -DAS_LIB="$env:VENDOR_INSTALL/lib/angelscript.lib" `
+            -DQUICKJS_INCLUDE="$vendor/include" `
+            -DQUICKJS_LIB="$vendor/lib/quickjs.lib" `
+            -DWREN_INC="$vendor/include" `
+            -DWREN_LIB="$vendor/lib/wren.lib" `
+            -DSQUIRREL_INC="$vendor/include" `
+            -DSQUIRREL_LIB="$vendor/lib/squirrel.lib" `
+            -DAS_INC="$vendor/include" `
+            -DAS_LIB="$vendor/lib/angelscript.lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
             -DPOLYLANG_BUILD_ODIN_TESTS=OFF
