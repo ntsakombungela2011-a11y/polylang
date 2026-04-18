@@ -99,13 +99,20 @@ jobs:
         # are present for the plugin build. This avoids cache races
         # where cache claims to be valid but artifacts are missing.
         run: |
+          # Create shims for missing POSIX headers required by QuickJS on Windows/MSVC
+          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
+          Set-Content -Path "vendor/msvc_shim/unistd.h" -Value "#include <io.h>`n#include <process.h>`n#define STDIN_FILENO 0`n#define STDOUT_FILENO 1`n#define STDERR_FILENO 2"
+          Set-Content -Path "vendor/msvc_shim/sys/time.h" -Value "struct timezone { int  tz_minuteswest; int  tz_dsttime; };"
+
           cmake `
             -S vendor `
             -B vendor\build-windows `
             -G "Visual Studio 17 2022" `
+            -T ClangCL `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL"
+            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
+            -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
           cmake --install vendor\build-windows --config Release
 
