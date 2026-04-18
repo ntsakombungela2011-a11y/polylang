@@ -33,11 +33,79 @@ endif()
 
 # ── godot-cpp submodule guard ─────────────────────────────────
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp/CMakeLists.txt")
-    message(FATAL_ERROR
-        "godot-cpp submodule missing.\n"
-        "Run: git submodule update --init --recursive")
+    message(STATUS "godot-cpp submodule missing; attempting to download godot-4.3-stable.zip")
+    set(_gcpp_url "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.3-stable.zip")
+    set(_gcpp_tmp "${CMAKE_CURRENT_SOURCE_DIR}/_gcpp_tmp")
+    file(MAKE_DIRECTORY ${_gcpp_tmp})
+    set(_zip_path "${_gcpp_tmp}/godot-cpp.zip")
+    if(NOT EXISTS ${_zip_path})
+        message(STATUS "Downloading ${_gcpp_url}...")
+        file(DOWNLOAD ${_gcpp_url} ${_zip_path} SHOW_PROGRESS)
+    endif()
+    if(WIN32)
+        execute_process(COMMAND powershell -NoProfile -Command "Expand-Archive -LiteralPath '${_zip_path}' -DestinationPath '${_gcpp_tmp}' -Force"
+                        RESULT_VARIABLE _exp_res)
+        if(NOT _exp_res EQUAL 0)
+            message(WARNING "Failed to expand godot-cpp zip with PowerShell; please run 'git submodule update --init --recursive' or provide godot-cpp manually.")
+        endif()
+    else()
+        find_program(UNZIP_EXE unzip)
+        if(UNZIP_EXE)
+            execute_process(COMMAND ${UNZIP_EXE} -o ${_zip_path} -d ${_gcpp_tmp} RESULT_VARIABLE _exp_res)
+        else()
+            execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${_zip_path} WORKING_DIRECTORY ${_gcpp_tmp} RESULT_VARIABLE _exp_res)
+        endif()
+        if(NOT _exp_res EQUAL 0)
+            message(WARNING "Failed to extract godot-cpp zip; please ensure 'unzip' or 'tar' is available, or run 'git submodule update --init --recursive'.")
+        endif()
+    endif()
+    # Move inner folder contents to expected location if extraction produced a single top-level dir
+    file(GLOB _gcpp_children RELATIVE ${_gcpp_tmp} "${_gcpp_tmp}/*")
+    list(LENGTH _gcpp_children _child_count)
+    if(_child_count EQUAL 1)
+        list(GET _gcpp_children 0 _inner)
+        file(RENAME "${_gcpp_tmp}/${_inner}" "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp")
+    else()
+        file(RENAME "${_gcpp_tmp}" "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp")
+    endif()
 endif()
 add_subdirectory(godot-cpp)
+
+# Ensure godot-cpp generated headers (gen/include) are visible to the plugin
+# Some CI runs build godot-cpp into the build tree, producing gen/include under the build dir.
+find_path(GODOT_CPP_GEN_INCLUDE
+    NAMES godot_cpp/core/gdextension_interface_loader.hpp
+    PATHS
+        "${CMAKE_BINARY_DIR}/godot-cpp/gen/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/godot-cpp/gen/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/build_windows/godot-cpp/gen/include"
+        "${CMAKE_SOURCE_DIR}/build_windows/godot-cpp/gen/include"
+        "${CMAKE_SOURCE_DIR}/godot-cpp/gen/include"
+    NO_DEFAULT_PATH
+)
+if(GODOT_CPP_GEN_INCLUDE)
+    # Convert to absolute real path to avoid issues with relative paths or spaces
+    file(REAL_PATH "${GODOT_CPP_GEN_INCLUDE}" POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL)
+    if(EXISTS "${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL}")
+        set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL})
+        message(STATUS "Found godot-cpp generated headers: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    else()
+        # Fall back to original if REAL_PATH failed
+        set(POLYLANG_GODOT_CPP_GEN_INCLUDE ${GODOT_CPP_GEN_INCLUDE})
+        message(WARNING "Resolved godot-cpp gen include path does not exist: ${POLYLANG_GODOT_CPP_GEN_INCLUDE_REAL} — using original: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    endif()
+    # If the specific header exists in the godot-cpp gen include, copy it into our include/ folder
+    set(_g_header "${POLYLANG_GODOT_CPP_GEN_INCLUDE}/godot_cpp/core/gdextension_interface_loader.hpp")
+    if(EXISTS "${_g_header}")
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/godot_cpp/core")
+        file(COPY "${_g_header}" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/include/godot_cpp/core")
+        message(STATUS "Copied godot-cpp generated header to include/: ${_g_header}")
+    else()
+        message(STATUS "godot-cpp generated header not present at configure time: ${_g_header}")
+    endif()
+else()
+    message(WARNING "godot-cpp generated headers not found (godot_cpp/core/gdextension_interface_loader.hpp). If build fails, ensure godot-cpp 'gen/include' is generated and accessible.")
+endif()
 
 # ── iOS requires static libs ──────────────────────────────────
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
@@ -127,6 +195,16 @@ else()
     )
 endif()
 
+if(DEFINED POLYLANG_GODOT_CPP_GEN_INCLUDE)
+    # Ensure absolute path and existence before adding to target
+    if(EXISTS "${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+        target_include_directories(polylang PRIVATE "${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+        message(STATUS "Added godot-cpp gen include to polylang: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    else()
+        message(WARNING "POLYLANG_GODOT_CPP_GEN_INCLUDE set but directory does not exist: ${POLYLANG_GODOT_CPP_GEN_INCLUDE}")
+    endif()
+endif()
+
 target_compile_definitions(polylang PRIVATE
     POLYLANG_VERSION_MAJOR=6
     POLYLANG_VERSION_MINOR=7
@@ -175,39 +253,101 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
 endif()
 
 # ── QuickJS (JS + TS) ─────────────────────────────────────────
-find_library(QUICKJS_LIB NAMES quickjs QUIET)
+function(find_library_with_vendor_fallback var name)
+    find_library(${var} NAMES ${name} QUIET)
+    if(NOT ${var})
+        # Try common vendor build locations as a fallback
+        set(_vendor_build_release "${CMAKE_SOURCE_DIR}/../vendor/build-windows/Release")
+        set(_vendor_build "${CMAKE_SOURCE_DIR}/../vendor/build-windows")
+        find_library(${var} NAMES ${name} PATHS ${CMAKE_SOURCE_DIR}/../vendor/install-windows/lib ${_vendor_build_release} ${_vendor_build} NO_DEFAULT_PATH)
+    endif()
+    # If find_library still didn't return a usable path, try locating literal .lib files
+    if(NOT ${var})
+        set(_search_dirs
+            "${CMAKE_SOURCE_DIR}/../vendor/install-windows/lib"
+            "${CMAKE_SOURCE_DIR}/../vendor/build-windows"
+            "${CMAKE_SOURCE_DIR}/../vendor/build-windows/Release"
+            "${CMAKE_SOURCE_DIR}/../vendor"
+        )
+        foreach(_d IN LISTS _search_dirs)
+            if(EXISTS "${_d}")
+                file(GLOB _found_libs RELATIVE "${_d}" "${_d}/${name}*.lib")
+                if(_found_libs)
+                    list(GET _found_libs 0 _first)
+                    set(_fullpath "${_d}/${_first}")
+                    if(EXISTS "${_fullpath}")
+                        set(${var} "${_fullpath}" PARENT_SCOPE)
+                        break()
+                    endif()
+                endif()
+            endif()
+        endforeach()
+    endif()
+endfunction()
+
+find_library_with_vendor_fallback(QUICKJS_LIB quickjs)
 find_path(QUICKJS_INCLUDE NAMES quickjs/quickjs.h QUIET)
+if(NOT QUICKJS_INCLUDE)
+    find_path(QUICKJS_INCLUDE NAMES quickjs/quickjs.h PATHS ${CMAKE_SOURCE_DIR}/../vendor/install-windows/include ${CMAKE_SOURCE_DIR}/../vendor/build-windows/include ${CMAKE_SOURCE_DIR}/../vendor/include NO_DEFAULT_PATH)
+endif()
 if(QUICKJS_LIB AND QUICKJS_INCLUDE)
-    pl_adapter(polylang_adapter_js  adapters/javascript/polylang_js_adapter.cpp)
-    target_link_libraries(polylang_adapter_js  PRIVATE ${QUICKJS_LIB})
-    target_include_directories(polylang_adapter_js  PRIVATE ${QUICKJS_INCLUDE})
-    pl_adapter(polylang_adapter_ts  adapters/typescript/polylang_ts_adapter.cpp)
-    target_link_libraries(polylang_adapter_ts  PRIVATE ${QUICKJS_LIB})
-    target_include_directories(polylang_adapter_ts  PRIVATE ${QUICKJS_INCLUDE})
+    if(EXISTS "${QUICKJS_LIB}" OR TARGET quickjs)
+        pl_adapter(polylang_adapter_js  adapters/javascript/polylang_js_adapter.cpp)
+        target_link_libraries(polylang_adapter_js  PRIVATE ${QUICKJS_LIB})
+        target_include_directories(polylang_adapter_js  PRIVATE ${QUICKJS_INCLUDE})
+        pl_adapter(polylang_adapter_ts  adapters/typescript/polylang_ts_adapter.cpp)
+        target_link_libraries(polylang_adapter_ts  PRIVATE ${QUICKJS_LIB})
+        target_include_directories(polylang_adapter_ts  PRIVATE ${QUICKJS_INCLUDE})
+        # MSVC: quickjs.h uses NAN macros that need _USE_MATH_DEFINES
+        if(MSVC)
+            if(TARGET polylang_adapter_js)
+                target_compile_definitions(polylang_adapter_js PRIVATE _USE_MATH_DEFINES)
+            endif()
+            if(TARGET polylang_adapter_ts)
+                target_compile_definitions(polylang_adapter_ts PRIVATE _USE_MATH_DEFINES)
+            endif()
+        endif()
+    else()
+        message(WARNING "QuickJS library variable set but file not found: ${QUICKJS_LIB} — skipping JS/TS adapters")
+    endif()
     message(STATUS "JS/TS (QuickJS): ENABLED")
 else()
     message(STATUS "QuickJS: NOT FOUND — JS/TS skipped")
 endif()
 
 # ── Squirrel ─────────────────────────────────────────────────
-find_library(SQUIRREL_LIB NAMES squirrel QUIET)
+find_library_with_vendor_fallback(SQUIRREL_LIB squirrel)
 find_path(SQUIRREL_INC NAMES squirrel.h QUIET)
+if(NOT SQUIRREL_INC)
+    find_path(SQUIRREL_INC NAMES squirrel.h PATHS ${CMAKE_SOURCE_DIR}/../vendor/install-windows/include ${CMAKE_SOURCE_DIR}/../vendor/squirrel/include NO_DEFAULT_PATH)
+endif()
 if(SQUIRREL_LIB AND SQUIRREL_INC)
-    pl_adapter(polylang_adapter_squirrel adapters/squirrel/polylang_squirrel_adapter.cpp)
-    target_link_libraries(polylang_adapter_squirrel PRIVATE ${SQUIRREL_LIB})
-    target_include_directories(polylang_adapter_squirrel PRIVATE ${SQUIRREL_INC})
+    if(EXISTS "${SQUIRREL_LIB}" OR TARGET squirrel)
+        pl_adapter(polylang_adapter_squirrel adapters/squirrel/polylang_squirrel_adapter.cpp)
+        target_link_libraries(polylang_adapter_squirrel PRIVATE ${SQUIRREL_LIB})
+        target_include_directories(polylang_adapter_squirrel PRIVATE ${SQUIRREL_INC})
+    else()
+        message(WARNING "Squirrel library variable set but file not found: ${SQUIRREL_LIB} — skipping Squirrel adapter")
+    endif()
     message(STATUS "Squirrel: ENABLED")
 else()
     message(STATUS "Squirrel: NOT FOUND — skipped")
 endif()
 
 # ── Wren ─────────────────────────────────────────────────────
-find_library(WREN_LIB NAMES wren QUIET)
+find_library_with_vendor_fallback(WREN_LIB wren)
 find_path(WREN_INC NAMES wren.h QUIET)
+if(NOT WREN_INC)
+    find_path(WREN_INC NAMES wren.h PATHS ${CMAKE_SOURCE_DIR}/../vendor/install-windows/include ${CMAKE_SOURCE_DIR}/../vendor/wren/src/include NO_DEFAULT_PATH)
+endif()
 if(WREN_LIB AND WREN_INC)
-    pl_adapter(polylang_adapter_wren adapters/wren/polylang_wren_adapter.cpp)
-    target_link_libraries(polylang_adapter_wren PRIVATE ${WREN_LIB})
-    target_include_directories(polylang_adapter_wren PRIVATE ${WREN_INC})
+    if(EXISTS "${WREN_LIB}" OR TARGET wren)
+        pl_adapter(polylang_adapter_wren adapters/wren/polylang_wren_adapter.cpp)
+        target_link_libraries(polylang_adapter_wren PRIVATE ${WREN_LIB})
+        target_include_directories(polylang_adapter_wren PRIVATE ${WREN_INC})
+    else()
+        message(WARNING "Wren library variable set but file not found: ${WREN_LIB} — skipping Wren adapter")
+    endif()
     message(STATUS "Wren: ENABLED")
 else()
     message(STATUS "Wren: NOT FOUND — skipped")
@@ -216,12 +356,19 @@ endif()
 # ── AngelScript ──────────────────────────────────────────────
 # Android arm64 requires as_callfunc_arm64.S assembly which is not
 # in the vendored sources — skip AngelScript on Android entirely.
-find_library(AS_LIB NAMES angelscript QUIET)
+find_library_with_vendor_fallback(AS_LIB angelscript)
 find_path(AS_INC NAMES angelscript.h QUIET)
+if(NOT AS_INC)
+    find_path(AS_INC NAMES angelscript.h PATHS ${CMAKE_SOURCE_DIR}/../vendor/install-windows/include ${CMAKE_SOURCE_DIR}/../vendor/angelscript/angelscript/include NO_DEFAULT_PATH)
+endif()
 if(AS_LIB AND AS_INC AND NOT ANDROID)
-    pl_adapter(polylang_adapter_as adapters/angelscript/polylang_angelscript_adapter.cpp)
-    target_link_libraries(polylang_adapter_as PRIVATE ${AS_LIB})
-    target_include_directories(polylang_adapter_as PRIVATE ${AS_INC})
+    if(EXISTS "${AS_LIB}" OR TARGET angelscript)
+        pl_adapter(polylang_adapter_as adapters/angelscript/polylang_angelscript_adapter.cpp)
+        target_link_libraries(polylang_adapter_as PRIVATE ${AS_LIB})
+        target_include_directories(polylang_adapter_as PRIVATE ${AS_INC})
+    else()
+        message(WARNING "AngelScript library variable set but file not found: ${AS_LIB} — skipping AngelScript adapter")
+    endif()
     # Add-on headers: scriptstdstring and scriptarray live in named subdirs
     if(DEFINED AS_ADDONS_LIB)
         find_library(AS_STDSTRING_LIB NAMES as_scriptstdstring PATHS ${AS_ADDONS_LIB} NO_DEFAULT_PATH)

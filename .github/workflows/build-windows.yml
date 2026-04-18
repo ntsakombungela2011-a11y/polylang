@@ -47,16 +47,18 @@ jobs:
         id: cache_gcpp
         uses: actions/cache@v4
         with:
-          path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-4.3-stable-v2
+          path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
+          key: godot-cpp-windows-detected-v5
 
-      - name: Fetch godot-cpp (4.3-stable)
+      - name: Fetch godot-cpp
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
         run: |
-          $dest = "$env:PLUGIN_DIR\godot-cpp"
+          $dest = Join-Path "${{ github.workspace }}" "$env:PLUGIN_DIR\godot-cpp"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          # Use the stable tag zip — reliable, no branch detection needed
-          $url = "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.3-stable.zip"
+          # Detect default branch to match Linux logic and get required 4.4+ headers
+          $branch = (git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | Select-String 'ref: refs/heads/(.*)\s+HEAD').Matches[0].Groups[1].Value
+          if (-not $branch) { $branch = "master" }
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$branch.zip"
           Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
           Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
           $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
@@ -69,7 +71,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor\install-windows
-          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v2
+          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v4
 
       - name: Verify vendored deps (Windows)
         id: verify_vendor
@@ -77,7 +79,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
+            "$env:VENDOR_INSTALL\lib\lua54.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -96,15 +98,27 @@ jobs:
           }
 
       - name: Build vendored deps (Windows)
-        if: steps.cache_vendor.outputs.cache-hit != 'true' || steps.verify_vendor.outputs.vendor_ready != 'true'
+        # Always run vendored deps build to ensure required libraries
+        # are present for the plugin build. This avoids cache races
+        # where cache claims to be valid but artifacts are missing.
         run: |
+          # Create shims for missing POSIX headers required by QuickJS on Windows/MSVC
+          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
+          Set-Content -Path "vendor/msvc_shim/unistd.h" -Value "#include <io.h>`n#include <process.h>`n#define STDIN_FILENO 0`n#define STDOUT_FILENO 1`n#define STDERR_FILENO 2"
+          Set-Content -Path "vendor/msvc_shim/sys/time.h" -Value "struct timeval { long tv_sec; long tv_usec; };`nstruct timezone { int  tz_minuteswest; int  tz_dsttime; };`nint gettimeofday(struct timeval *tv, struct timezone *tz);"
+          Set-Content -Path "vendor/msvc_shim/pthread.h" -Value "#include <windows.h>`ntypedef CRITICAL_SECTION pthread_mutex_t;`ntypedef CONDITION_VARIABLE pthread_cond_t;`ntypedef int pthread_t;`n#define PTHREAD_MUTEX_INITIALIZER {0}`n#define CLOCK_REALTIME 0`nstruct timespec { long tv_sec; long tv_nsec; };`nint clock_gettime(int clk_id, struct timespec *tp);`nint pthread_mutex_lock(pthread_mutex_t *m);`nint pthread_mutex_unlock(pthread_mutex_t *m);`nint pthread_cond_init(pthread_cond_t *c, void *a);`nint pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m);`nint pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m, const struct timespec *t);"
+          Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
+
           cmake `
             -S vendor `
             -B vendor\build-windows `
             -G "Visual Studio 17 2022" `
+            -T ClangCL `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL"
+            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
+            -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h" `
+            -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
           cmake --install vendor\build-windows --config Release
 
@@ -184,27 +198,35 @@ jobs:
 
       - name: Configure (Windows x64)
         run: |
-          $s = "$env:PLUGIN_DIR"
-          $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          $s = (Resolve-Path "$env:PLUGIN_DIR").Path.Replace('\', '/')
+          $b = (Join-Path $s "$env:BUILD_DIR").Replace('\', '/')
+          $vendor = $env:VENDOR_INSTALL.Replace('\', '/')
+          
+          $gcpp_inc = "$s/godot-cpp/include"
+          $gcpp_gen = "$b/godot-cpp/gen/include"
+          $lua_inc = "$vendor/include/lua5.4"
+          $lua_lib = "$vendor/lib/lua5.4.lib"
+          
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
-            -S $s `
-            -B $b `
+            -S "$s" `
+            -B "$b" `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
-            -DGODOT_CPP_GEN_INCLUDE="$b/godot-cpp/gen/include" `
-            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include/lua5.4" `
-            -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua5.4.lib" `
-            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
-            -DQUICKJS_LIB="$env:VENDOR_INSTALL/lib/quickjs.lib" `
-            -DWREN_INC="$env:VENDOR_INSTALL/include" `
-            -DWREN_LIB="$env:VENDOR_INSTALL/lib/wren.lib" `
-            -DSQUIRREL_INC="$env:VENDOR_INSTALL/include" `
-            -DSQUIRREL_LIB="$env:VENDOR_INSTALL/lib/squirrel.lib" `
-            -DAS_INC="$env:VENDOR_INSTALL/include" `
-            -DAS_LIB="$env:VENDOR_INSTALL/lib/angelscript.lib" `
+            -DCMAKE_PREFIX_PATH="$vendor" `
+            -DGODOT_CPP_INCLUDE="$gcpp_inc" `
+            -DGODOT_CPP_GEN_INCLUDE="$gcpp_gen" `
+            -DLUA_INCLUDE_DIR="$lua_inc" `
+            -DLUA_LIBRARIES="$lua_lib" `
+            -DQUICKJS_INCLUDE="$vendor/include" `
+            -DQUICKJS_LIB="$vendor/lib/quickjs.lib" `
+            -DWREN_INC="$vendor/include" `
+            -DWREN_LIB="$vendor/lib/wren.lib" `
+            -DSQUIRREL_INC="$vendor/include" `
+            -DSQUIRREL_LIB="$vendor/lib/squirrel.lib" `
+            -DAS_INC="$vendor/include" `
+            -DAS_LIB="$vendor/lib/angelscript.lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
             -DPOLYLANG_BUILD_ODIN_TESTS=OFF
