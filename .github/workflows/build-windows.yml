@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-detected-v4
+          key: godot-cpp-windows-detected-v5
 
       - name: Fetch godot-cpp
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor\install-windows
-          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v3
+          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v4
 
       - name: Verify vendored deps (Windows)
         id: verify_vendor
@@ -192,7 +192,7 @@ jobs:
           $gcpp_inc = "$s/godot-cpp/include"
           $gcpp_gen = "$b/godot-cpp/gen/include"
           $lua_inc = "$vendor/include"
-          $lua_lib = "$vendor/lib/lua5.4.lib"
+          $lua_lib = "$vendor/lib/lua54.lib"
           
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
