@@ -45,15 +45,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-4.3-stable-v2
+          key: godot-cpp-windows-detected-v3
 
-      - name: Fetch godot-cpp (4.3-stable)
+      - name: Fetch godot-cpp
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
         run: |
-          $dest = "$env:PLUGIN_DIR\godot-cpp"
+          $dest = Join-Path (Get-Location) "$env:PLUGIN_DIR\godot-cpp"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          # Use the stable tag zip — reliable, no branch detection needed
-          $url = "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.3-stable.zip"
+          # Detect default branch to match Linux logic and get required 4.4+ headers
+          $branch = (git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | Select-String 'ref: refs/heads/(.*)\s+HEAD').Matches[0].Groups[1].Value
+          if (-not $branch) { $branch = "master" }
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$branch.zip"
           Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
           Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
           $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
@@ -74,7 +76,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
+            "$env:VENDOR_INSTALL\lib\lua54.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -190,7 +192,7 @@ jobs:
           $gcpp_inc = "$s/godot-cpp/include"
           $gcpp_gen = "$b/godot-cpp/gen/include"
           $lua_inc = "$vendor/include/lua5.4"
-          $lua_lib = "$vendor/lib/lua5.4.lib"
+          $lua_lib = Join-Path $env:VENDOR_INSTALL "lib\lua54.lib"
           
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
