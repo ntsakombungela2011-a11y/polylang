@@ -76,7 +76,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
+            "$env:VENDOR_INSTALL\lib\lua54.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
