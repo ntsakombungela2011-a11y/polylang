@@ -1,6 +1,6 @@
 # PolyLang — Vendored Dependencies
 
-Last updated: 2026-04-11 11:57 UTC
+Last updated: 2026-04-18 19:54 UTC
 
 | Dependency | Version | Location |
 |------------|---------|----------|
