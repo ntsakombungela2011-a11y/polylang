@@ -24,7 +24,12 @@ add_library(lua54 STATIC ${LUA_SOURCES})
 target_include_directories(lua54 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lua/src>
     $<INSTALL_INTERFACE:include/lua5.4>)
-set_target_properties(lua54 PROPERTIES OUTPUT_NAME lua5.4 C_STANDARD 99)
+set_target_properties(lua54 PROPERTIES C_STANDARD 99)
+if(WIN32)
+    set_target_properties(lua54 PROPERTIES OUTPUT_NAME lua54)
+else()
+    set_target_properties(lua54 PROPERTIES OUTPUT_NAME lua5.4)
+endif()
 if(ANDROID)
     target_compile_definitions(lua54 PRIVATE LUA_USE_POSIX)
 elseif(UNIX)
@@ -49,6 +54,9 @@ target_include_directories(quickjs PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/quickjs>
     $<INSTALL_INTERFACE:include/quickjs>)
 target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="vendored" _GNU_SOURCE)
+if(WIN32)
+    target_compile_definitions(quickjs PRIVATE CONFIG_WIN32)
+endif()
 set_target_properties(quickjs PROPERTIES C_STANDARD 11)
 if(UNIX)
     target_link_libraries(quickjs PRIVATE m)
