@@ -184,28 +184,30 @@ jobs:
           #endif
           "@ | Set-Content -Path "vendor/msvc_shim/unistd.h"
 
-          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
           @"
-          #ifndef MSVC_SYS_STAT_H
-          #define MSVC_SYS_STAT_H
+          #ifndef MSVC_POSIX_FIXUP_H
+          #define MSVC_POSIX_FIXUP_H
+          #include <stdio.h>
           #include <sys/stat.h>
+          #include <stdint.h>
+
+          #define popen _popen
+          #define pclose _pclose
+
           #ifndef S_ISDIR
           #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
           #endif
           #ifndef S_ISREG
           #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
           #endif
-          #endif
-          "@ | Set-Content -Path "vendor/msvc_shim/sys/stat.h"
 
-          @"
-          #ifndef MSVC_STDIO_H
-          #define MSVC_STDIO_H
-          #include <stdio.h>
-          #define popen _popen
-          #define pclose _pclose
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
           #endif
-          "@ | Set-Content -Path "vendor/msvc_shim/stdio.h"
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/msvc_posix_fixup.h"
 
           @"
           #ifndef MSVC_SYS_TIME_H
@@ -271,6 +273,7 @@ jobs:
           Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
 
           $v = (Resolve-Path vendor).Path.Replace('\', '/')
+          $shim = (Get-Item vendor/msvc_shim).FullName.Replace('\','/')
           cmake `
             -S vendor `
             -B vendor\build-windows `
@@ -280,7 +283,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
             -DCMAKE_PROJECT_INCLUDE="$v/CMakeLists.windows.cmake" `
-            -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h" `
+            -DCMAKE_C_FLAGS="-I$shim -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h /FI $shim/msvc_posix_fixup.h" `
             -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
           cmake --install vendor\build-windows --config Release
