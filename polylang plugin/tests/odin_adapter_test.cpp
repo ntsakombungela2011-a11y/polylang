@@ -23,6 +23,8 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <cstdint>
+
 #include "../include/pl_adapter_vtable.h"
 
 #if defined(_WIN32)
@@ -44,8 +46,9 @@ static int g_pass = 0, g_fail = 0;
     if ((got) == (expected)) {                                    \
         printf("  PASS  %s\n", msg); ++g_pass;                   \
     } else {                                                      \
-        printf("  FAIL  %s (got %d, expected %d)\n",             \
-               msg, (int)(got), (int)(expected)); ++g_fail;       \
+        printf("  FAIL  %s (got %lu, expected %lu)\n",           \
+               msg, (unsigned long)(uintptr_t)(got),             \
+               (unsigned long)(uintptr_t)(expected)); ++g_fail;  \
     }                                                             \
 } while(0)
 

@@ -624,7 +624,7 @@ jobs:
         - language: actions
           build-mode: none
         - language: c-cpp
-          build-mode: autobuild
+          build-mode: manual
         - language: go
           build-mode: autobuild
         - language: rust
@@ -637,6 +637,19 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
+
+    - name: Manual Build (C++)
+      if: matrix.language == 'c-cpp'
+      run: |
+        # Fetch godot-cpp (mirroring build-linux logic)
+        B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+        mkdir -p "polylang plugin/godot-cpp"
+        curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" | tar -xz --strip-components=1 -C "polylang plugin/godot-cpp"
+        
+        # Configure and build
+        cmake -S "polylang plugin" -B "polylang plugin/build_codeql" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOLYLANG_BUILD_TESTS=OFF
+        cmake --build "polylang plugin/build_codeql" --parallel
+
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
       with:
