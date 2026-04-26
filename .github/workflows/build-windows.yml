@@ -430,8 +430,7 @@ jobs:
             -DAS_LIB="$vendor/lib/angelscript.lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
-            -DPOLYLANG_BUILD_ODIN_TESTS=OFF `
-            -DCMAKE_CXX_FLAGS='/FI"polylang_script_instance_msvc.hpp"'
+            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
 
       - name: Build (Windows x64)
         run: cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel
