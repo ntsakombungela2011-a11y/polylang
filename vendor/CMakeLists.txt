@@ -102,6 +102,10 @@ file(GLOB AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source
 # in the vendor zip. Build STATIC on Android (no native call thunks needed
 # at link time — they're resolved at runtime via the JIT). Build SHARED on
 # desktop where the x64 .S file ships as part of the SDK.
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    enable_language(ASM_MASM)
+    list(APPEND AS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/source/as_callfunc_x64_msvc_asm.asm")
+endif()
 add_library(angelscript STATIC ${AS_SOURCES})
 target_include_directories(angelscript PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript/angelscript/include>
