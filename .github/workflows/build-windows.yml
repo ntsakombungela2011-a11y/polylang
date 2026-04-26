@@ -106,6 +106,55 @@ jobs:
           New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
           
           @"
+          #ifndef MSVC_DIRENT_H
+          #define MSVC_DIRENT_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <windows.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          typedef struct dirent {
+              char d_name[MAX_PATH];
+          } dirent;
+          typedef struct DIR {
+              HANDLE hFind;
+              WIN32_FIND_DATAA fd;
+              dirent ent;
+              int first;
+          } DIR;
+          static inline DIR* opendir(const char* name) {
+              DIR* dir = (DIR*)malloc(sizeof(DIR));
+              char path[MAX_PATH];
+              snprintf(path, MAX_PATH, "%s\\*", name);
+              dir->hFind = FindFirstFileA(path, &dir->fd);
+              if (dir->hFind == INVALID_HANDLE_VALUE) { free(dir); return NULL; }
+              dir->first = 1;
+              return dir;
+          }
+          static inline struct dirent* readdir(DIR* dir) {
+              if (dir->first) { dir->first = 0; }
+              else if (!FindNextFileA(dir->hFind, &dir->fd)) return NULL;
+              strncpy(dir->ent.d_name, dir->fd.cFileName, MAX_PATH);
+              return &dir->ent;
+          }
+          static inline void closedir(DIR* dir) {
+              if (dir->hFind != INVALID_HANDLE_VALUE) FindClose(dir->hFind);
+              free(dir);
+          }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/dirent.h"
+
+          @"
+          #ifndef MSVC_SYS_WAIT_H
+          #define MSVC_SYS_WAIT_H
+          #define WIFEXITED(s) (1)
+          #define WEXITSTATUS(s) (s)
+          #define WIFSIGNALED(s) (0)
+          #define WTERMSIG(s) (0)
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/wait.h"
+          @"
           #ifndef MSVC_UNISTD_H
           #define MSVC_UNISTD_H
           #include <io.h>
