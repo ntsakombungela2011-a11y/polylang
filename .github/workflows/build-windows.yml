@@ -165,6 +165,7 @@ jobs:
           #ifndef MSVC_UNISTD_H
           #define MSVC_UNISTD_H
           #include <io.h>
+          #include <stdint.h>
           #ifndef WIN32_LEAN_AND_MEAN
           #define WIN32_LEAN_AND_MEAN
           #endif
@@ -174,9 +175,37 @@ jobs:
           #define STDIN_FILENO 0
           #define STDOUT_FILENO 1
           #define STDERR_FILENO 2
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
+          #endif
           static inline void usleep(unsigned int us) { Sleep(us / 1000); }
           #endif
           "@ | Set-Content -Path "vendor/msvc_shim/unistd.h"
+
+          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
+          @"
+          #ifndef MSVC_SYS_STAT_H
+          #define MSVC_SYS_STAT_H
+          #include <sys/stat.h>
+          #ifndef S_ISDIR
+          #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+          #endif
+          #ifndef S_ISREG
+          #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
+          #endif
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/stat.h"
+
+          @"
+          #ifndef MSVC_STDIO_H
+          #define MSVC_STDIO_H
+          #include <stdio.h>
+          #define popen _popen
+          #define pclose _pclose
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/stdio.h"
 
           @"
           #ifndef MSVC_SYS_TIME_H
@@ -218,6 +247,7 @@ jobs:
           typedef void* pthread_mutexattr_t;
           typedef void* pthread_condattr_t;
           #define PTHREAD_MUTEX_INITIALIZER {0}
+          #define PTHREAD_CREATE_DETACHED 1
           #define CLOCK_REALTIME 0
           static inline int clock_gettime(int clk_id, struct timespec *tp) { return 0; }
           static inline int pthread_mutex_init(pthread_mutex_t* m, void* a) { return 0; }
@@ -232,6 +262,9 @@ jobs:
           static inline int pthread_cond_timedwait(pthread_cond_t* c, pthread_mutex_t* m, const struct timespec* t) { return 0; }
           static inline int pthread_create(pthread_t* t, void* a, void* (*f)(void*), void* p) { return 0; }
           static inline int pthread_join(pthread_t t, void** r) { return 0; }
+          static inline int pthread_attr_init(pthread_attr_t* a) { return 0; }
+          static inline int pthread_attr_setdetachstate(pthread_attr_t* a, int s) { return 0; }
+          static inline int pthread_attr_destroy(pthread_attr_t* a) { return 0; }
           #endif
           "@ | Set-Content -Path "vendor/msvc_shim/pthread.h"
 
