@@ -62,6 +62,13 @@ static int g_pass = 0, g_fail = 0;
 
 #define ASSERT_TRUE(cond, msg) ASSERT_NE(cond, false, msg)
 
+// ── Linkage for statically linked adapter fallback ──────────
+extern "C" {
+    void odin_fill_vtable(PLAdapterVTable* out);
+    typedef void (*SetServicesFn)(const OdinRuntimeServices*);
+    void odin_adapter_set_services(const OdinRuntimeServices* svc);
+}
+
 // ── Stub runtime services (no Godot present) ─────────────────
 static void stub_signal_emit(const char*, PLValue*, int32_t) {}
 static uint64_t stub_signal_connect(const char*,
@@ -271,8 +278,6 @@ int main(int argc, char** argv) {
 
         // Fallback: if the adapter is compiled into the test binary,
         // call odin_fill_vtable() directly.
-        // This allows CI to run the ABI tests even without a pre-built .so.
-        extern void odin_fill_vtable(PLAdapterVTable*);
         PLAdapterVTable vt{};
         odin_fill_vtable(&vt);
 
@@ -300,7 +305,6 @@ int main(int argc, char** argv) {
         fn(&vt);
 
         // Inject stub services before any compile/instantiate.
-        typedef void (*SetServicesFn)(const OdinRuntimeServices*);
         SetServicesFn set_svc = reinterpret_cast<SetServicesFn>(
             DL_SYM(dl, "odin_adapter_set_services"));
         if (set_svc) set_svc(&g_stub_services);

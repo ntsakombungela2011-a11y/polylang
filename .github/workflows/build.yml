@@ -227,7 +227,13 @@ jobs:
           find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "*.so" ! -name "polylang.so" \
             -exec cp {} pkg/addons/polylang/bin/linux/ \; 2>/dev/null || true
           cp -r "$PLUGIN_DIR/addons/polylang/"* pkg/addons/polylang/ 2>/dev/null || true
+          echo "=== Linux package contents ==="
+          find pkg -type f | sort
           zip -r polylang-linux.zip pkg/
+
+      - name: Causinator 9000 CI Diagnosis
+        if: failure()
+        uses: sylvainsf/causinator9000@v1.6.0
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -407,6 +413,10 @@ jobs:
           [ -f "$GO"   ] && cp "$GO"   pkg/addons/polylang/bin/android/ || true
           cp -r "$PLUGIN_DIR/addons/polylang/"* pkg/addons/polylang/ 2>/dev/null || true
           zip -r polylang-android.zip pkg/
+
+      - name: Causinator 9000 CI Diagnosis
+        if: failure()
+        uses: sylvainsf/causinator9000@v1.6.0
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
