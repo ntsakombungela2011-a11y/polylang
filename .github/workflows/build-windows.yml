@@ -109,6 +109,7 @@ jobs:
           Set-Content -Path "vendor/msvc_shim/pthread.h" -Value "#include <windows.h>`ntypedef CRITICAL_SECTION pthread_mutex_t;`ntypedef CONDITION_VARIABLE pthread_cond_t;`ntypedef int pthread_t;`n#define PTHREAD_MUTEX_INITIALIZER {0}`n#define CLOCK_REALTIME 0`nstruct timespec { long tv_sec; long tv_nsec; };`nint clock_gettime(int clk_id, struct timespec *tp);`nint pthread_mutex_lock(pthread_mutex_t *m);`nint pthread_mutex_unlock(pthread_mutex_t *m);`nint pthread_cond_init(pthread_cond_t *c, void *a);`nint pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m);`nint pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m, const struct timespec *t);"
           Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
 
+          $v = (Resolve-Path vendor).Path.Replace('\', '/')
           cmake `
             -S vendor `
             -B vendor\build-windows `
@@ -117,6 +118,7 @@ jobs:
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
+            -DCMAKE_PROJECT_INCLUDE="$v/CMakeLists.windows.cmake" `
             -DCMAKE_C_FLAGS="-I$((Get-Item vendor/msvc_shim).FullName.Replace('\','/')) -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h" `
             -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
@@ -215,6 +217,7 @@ jobs:
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_PREFIX_PATH="$vendor" `
+            -DCMAKE_PROJECT_INCLUDE="$s/CMakeLists.windows.cmake" `
             -DGODOT_CPP_INCLUDE="$gcpp_inc" `
             -DGODOT_CPP_GEN_INCLUDE="$gcpp_gen" `
             -DLUA_INCLUDE_DIR="$lua_inc" `
@@ -229,7 +232,8 @@ jobs:
             -DAS_LIB="$vendor/lib/angelscript.lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
-            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
+            -DPOLYLANG_BUILD_ODIN_TESTS=OFF `
+            -DCMAKE_CXX_FLAGS='/FI"polylang_script_instance_msvc.hpp"'
 
       - name: Build (Windows x64)
         run: cmake --build "$env:PLUGIN_DIR\$env:BUILD_DIR" --config Release --parallel

@@ -120,25 +120,20 @@ endif()
 # NOTE: These flags can improve safety but may break runtime behavior for GDExtensions.
 set(PL_HARDEN_FLAGS "")
 if(PL_ENABLE_HARDENING)
-    if(MSVC)
-        # MSVC deep hardening intentionally skipped to preserve runtime compatibility.
-        message(STATUS "PL_ENABLE_HARDENING=ON: MSVC deep hardening is skipped")
-    else()
-        list(APPEND PL_HARDEN_FLAGS
-            -Wall -Wextra -Wno-unused-parameter
-            -fstack-protector-strong
-            $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
-            $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
-        )
-        if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
-            list(APPEND PL_HARDEN_FLAGS -fPIE)
-        endif()
-        # RELRO is enabled; BIND_NOW is optional and controlled by PL_ENABLE_BIND_NOW.
-        if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS")
-            add_link_options(-Wl,-z,relro)
-            if(PL_ENABLE_BIND_NOW)
-                add_link_options(-Wl,-z,now)
-            endif()
+    list(APPEND PL_HARDEN_FLAGS
+        -Wall -Wextra -Wno-unused-parameter
+        -fstack-protector-strong
+        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
+        $<$<NOT:$<CONFIG:Debug>>:-D_GLIBCXX_ASSERTIONS> # DZ-07
+    )
+    if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        list(APPEND PL_HARDEN_FLAGS -fPIE)
+    endif()
+    # RELRO is enabled; BIND_NOW is optional and controlled by PL_ENABLE_BIND_NOW.
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS")
+        add_link_options(-Wl,-z,relro)
+        if(PL_ENABLE_BIND_NOW)
+            add_link_options(-Wl,-z,now)
         endif()
     endif()
 else()
@@ -298,15 +293,7 @@ if(QUICKJS_LIB AND QUICKJS_INCLUDE)
         pl_adapter(polylang_adapter_ts  adapters/typescript/polylang_ts_adapter.cpp)
         target_link_libraries(polylang_adapter_ts  PRIVATE ${QUICKJS_LIB})
         target_include_directories(polylang_adapter_ts  PRIVATE ${QUICKJS_INCLUDE})
-        # MSVC: quickjs.h uses NAN macros that need _USE_MATH_DEFINES
-        if(MSVC)
-            if(TARGET polylang_adapter_js)
-                target_compile_definitions(polylang_adapter_js PRIVATE _USE_MATH_DEFINES)
-            endif()
-            if(TARGET polylang_adapter_ts)
-                target_compile_definitions(polylang_adapter_ts PRIVATE _USE_MATH_DEFINES)
-            endif()
-        endif()
+
     else()
         message(WARNING "QuickJS library variable set but file not found: ${QUICKJS_LIB} — skipping JS/TS adapters")
     endif()
