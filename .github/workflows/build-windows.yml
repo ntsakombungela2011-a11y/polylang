@@ -104,7 +104,14 @@ jobs:
         run: |
           # Create shims for missing POSIX headers required by QuickJS on Windows/MSVC
           New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
-          
+
+          @"
+          #ifndef MSVC_UTIME_H
+          #define MSVC_UTIME_H
+          #include <sys/utime.h>
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/utime.h"
+
           @"
           #ifndef MSVC_DIRENT_H
           #define MSVC_DIRENT_H
