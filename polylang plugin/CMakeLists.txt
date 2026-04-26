@@ -294,6 +294,19 @@ if(QUICKJS_LIB AND QUICKJS_INCLUDE)
         target_link_libraries(polylang_adapter_ts  PRIVATE ${QUICKJS_LIB})
         target_include_directories(polylang_adapter_ts  PRIVATE ${QUICKJS_INCLUDE})
 
+        # Windows/ClangCL fix: link builtins to resolve __udivti3 (used by QuickJS)
+        if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            file(GLOB CLANG_RT_PATH 
+                "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/Llvm/x64/lib/clang/*/lib/windows/clang_rt.builtins-x86_64.lib"
+                "C:/Program Files/LLVM/lib/clang/*/lib/windows/clang_rt.builtins-x86_64.lib"
+            )
+            if(CLANG_RT_PATH)
+                list(GET CLANG_RT_PATH 0 CLANG_RT_LIB)
+                target_link_libraries(polylang_adapter_js PRIVATE "${CLANG_RT_LIB}")
+                target_link_libraries(polylang_adapter_ts PRIVATE "${CLANG_RT_LIB}")
+            endif()
+        endif()
+
     else()
         message(WARNING "QuickJS library variable set but file not found: ${QUICKJS_LIB} — skipping JS/TS adapters")
     endif()

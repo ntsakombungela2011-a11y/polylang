@@ -55,7 +55,9 @@ target_include_directories(quickjs PUBLIC
     $<INSTALL_INTERFACE:include/quickjs>)
 target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="vendored" _GNU_SOURCE)
 if(WIN32)
-    target_compile_definitions(quickjs PRIVATE CONFIG_WIN32 CONFIG_BIGNUM=0)
+    # JS_LIMB_BITS=32 prevents the use of __int128 for BigInt operations,
+    # which avoids emitting calls to __udivti3 (missing in MSVC runtime).
+    target_compile_definitions(quickjs PRIVATE CONFIG_WIN32 CONFIG_BIGNUM=0 JS_LIMB_BITS=32)
 endif()
 set_target_properties(quickjs PROPERTIES C_STANDARD 11)
 if(UNIX)
