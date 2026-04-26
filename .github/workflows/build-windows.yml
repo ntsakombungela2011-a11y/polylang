@@ -387,14 +387,14 @@ jobs:
 
       - name: Verify or clean build cache
         run: |
-          $genHeaders = "$env:PLUGIN_DIR\$env:BUILD_DIR\godot-cpp\gen\include"
-          if (-not (Test-Path $genHeaders)) {
-            Write-Host "Generated godot-cpp headers missing — clearing cmake cache to force full reconfigure"
-            $buildDir = "$env:PLUGIN_DIR\$env:BUILD_DIR"
-            if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
-          } else {
-            Write-Host "Generated headers present: $genHeaders"
+          # Always clean build directory if we've changed the toolset or critical flags
+          # to ensure the compiler is re-identified correctly.
+          $buildDir = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          if (Test-Path $buildDir) { 
+            Write-Host "Cleaning build directory $buildDir to force re-identification of compiler"
+            Remove-Item $buildDir -Recurse -Force 
           }
+          New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 
       - name: Configure (Windows x64)
         run: |
@@ -429,8 +429,7 @@ jobs:
             -DSQUIRREL_LIB="$vendor/lib/squirrel.lib" `
             -DAS_INC="$vendor/include" `
             -DAS_LIB="$vendor/lib/angelscript.lib" `
-            -DAS_STDSTRING_LIB="$vendor/lib/as_scriptstdstring.lib" `
-            -DAS_ARRAY_LIB="$vendor/lib/as_scriptarray.lib" `
+            -DAS_ADDONS_LIB="$vendor/lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
             -DPOLYLANG_BUILD_ODIN_TESTS=OFF
