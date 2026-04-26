@@ -427,7 +427,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y g++ libdl-dev unzip
+        run: sudo apt-get update && sudo apt-get install -y g++ unzip
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
@@ -468,7 +468,7 @@ jobs:
           && echo "$(pwd)/odin_install" >> $GITHUB_PATH \
           && echo "available=true" >> $GITHUB_OUTPUT || echo "available=false" >> $GITHUB_OUTPUT
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y g++ libdl-dev unzip
+        run: sudo apt-get update && sudo apt-get install -y g++ unzip
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
