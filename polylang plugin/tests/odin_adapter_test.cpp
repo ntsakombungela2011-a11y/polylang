@@ -62,6 +62,17 @@ static int g_pass = 0, g_fail = 0;
 
 #define ASSERT_TRUE(cond, msg) ASSERT_NE(cond, false, msg)
 
+typedef struct OdinRuntimeServices {
+    void     (*signal_emit)(const char*, PLValue*, int32_t);
+    uint64_t (*signal_connect)(const char*, void(*)(PLValue*, int32_t, void*), void*);
+    void     (*signal_disconnect)(uint64_t);
+    int      (*bridge_call)(const char*, const char*, PLValue*, int32_t, PLValue*);
+    int      (*resource_fetch)(const char*, PLValue*);
+    void     (*resource_release)(PLValue*);
+    void     (*profiler_begin)(const char*);
+    void     (*profiler_end)(const char*);
+} OdinRuntimeServices;
+
 // ── Linkage for statically linked adapter fallback ──────────
 extern "C" {
     void odin_fill_vtable(PLAdapterVTable* out);
@@ -87,17 +98,6 @@ static void stub_profiler_begin(const char* label) {
 static void stub_profiler_end(const char* label) {
     printf("    [profiler_end]   %s\n", label ? label : "(null)");
 }
-
-typedef struct OdinRuntimeServices {
-    void     (*signal_emit)(const char*, PLValue*, int32_t);
-    uint64_t (*signal_connect)(const char*, void(*)(PLValue*, int32_t, void*), void*);
-    void     (*signal_disconnect)(uint64_t);
-    int      (*bridge_call)(const char*, const char*, PLValue*, int32_t, PLValue*);
-    int      (*resource_fetch)(const char*, PLValue*);
-    void     (*resource_release)(PLValue*);
-    void     (*profiler_begin)(const char*);
-    void     (*profiler_end)(const char*);
-} OdinRuntimeServices;
 
 static const OdinRuntimeServices g_stub_services = {
     stub_signal_emit, stub_signal_connect, stub_signal_disconnect,
