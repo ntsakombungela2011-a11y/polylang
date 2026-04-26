@@ -436,7 +436,7 @@ jobs:
       - name: Extract zip
         run: |
           unzip extracted/polylang-linux.zip -d extracted_zip
-          mkdir build
+          mkdir -p build
           cp extracted_zip/pkg/addons/polylang/bin/linux/libpolylang_odin.so build/ || true
       - name: Build test binary
         run: |
@@ -477,7 +477,7 @@ jobs:
       - name: Extract zip
         run: |
           unzip extracted/polylang-linux.zip -d extracted_zip
-          mkdir build
+          mkdir -p build
           cp extracted_zip/pkg/addons/polylang/bin/linux/libpolylang_odin.so build/ || true
       - name: Build sandbox test binary
         run: |
