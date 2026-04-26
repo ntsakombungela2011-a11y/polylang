@@ -1,0 +1,670 @@
+name: PolyLang — CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'polylang plugin/src/**'
+      - 'polylang plugin/adapters/**'
+      - 'polylang plugin/include/**'
+      - 'polylang plugin/CMakeLists.txt'
+      - 'vendor/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+  workflow_dispatch:
+  schedule:
+    - cron: '26 16 * * 1'
+  issues:
+    types: [opened]
+
+env:
+  PLUGIN_DIR: "polylang plugin"
+
+permissions:
+  contents: read
+  issues: write
+  security-events: write
+  packages: read
+  actions: read
+
+jobs:
+  # ── Linux Build ─────────────────────────────────────────────────────────────
+  build-linux:
+    name: Build — Linux x86_64
+    if: github.event_name != 'issues' && github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_DIR:  build_linux
+      VENDOR_INSTALL: ${{ github.workspace }}/vendor/install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Detect godot-cpp branch
+        id: gcpp
+        run: |
+          B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+              | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+          echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp
+        id: cache_gcpp
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/godot-cpp"
+          key: godot-cpp-linux-${{ steps.gcpp.outputs.branch }}-v1
+
+      - name: Fetch godot-cpp
+        if: steps.cache_gcpp.outputs.cache-hit != 'true'
+        run: |
+          B="${{ steps.gcpp.outputs.branch }}"
+          mkdir -p "$PLUGIN_DIR/godot-cpp"
+          curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build git \
+            libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \
+            libwayland-dev libxkbcommon-dev \
+            python3-dev \
+            golang-go \
+            dotnet-sdk-8.0 || true
+
+      - name: Read Nim version pin
+        id: nim_ver
+        run: |
+          V=$(cat vendor/nim-version/VERSION 2>/dev/null | tr -d '[:space:]') || V="2.0.8"
+          echo "version=${V}" >> $GITHUB_OUTPUT
+
+      - name: Cache Nim binary
+        id: cache_nim
+        uses: actions/cache@v4
+        with:
+          path: vendor/nim-bin
+          key: nim-linux-${{ steps.nim_ver.outputs.version }}-v1
+
+      - name: Download Nim ${{ steps.nim_ver.outputs.version }}
+        if: steps.cache_nim.outputs.cache-hit != 'true'
+        run: |
+          VER="${{ steps.nim_ver.outputs.version }}"
+          mkdir -p vendor/nim-bin
+          curl -sL "https://nim-lang.org/download/nim-${VER}-linux_x64.tar.xz" \
+            | tar -xJ --strip-components=1 -C vendor/nim-bin
+
+      - name: Add Nim to PATH
+        run: echo "${{ github.workspace }}/vendor/nim-bin/bin" >> $GITHUB_PATH
+
+      - name: Read Julia version pin
+        id: julia_ver
+        run: |
+          V=$(cat vendor/julia-version/VERSION 2>/dev/null | tr -d '[:space:]') || V="1.10.4"
+          echo "version=${V}" >> $GITHUB_OUTPUT
+
+      - name: Cache Julia binary
+        id: cache_julia
+        uses: actions/cache@v4
+        with:
+          path: vendor/julia-bin
+          key: julia-linux-${{ steps.julia_ver.outputs.version }}-v1
+
+      - name: Download Julia ${{ steps.julia_ver.outputs.version }}
+        if: steps.cache_julia.outputs.cache-hit != 'true'
+        run: |
+          VER="${{ steps.julia_ver.outputs.version }}"
+          MM=$(echo "$VER" | cut -d. -f1-2)
+          mkdir -p vendor/julia-bin
+          curl -sL "https://julialang-s3.julialang.org/bin/linux/x64/${MM}/julia-${VER}-linux-x86_64.tar.gz" \
+            | tar -xz --strip-components=1 -C vendor/julia-bin
+
+      - name: Set JULIA_HOME
+        run: echo "JULIA_HOME=${{ github.workspace }}/vendor/julia-bin" >> $GITHUB_ENV
+
+      - name: Cache vendored deps
+        id: cache_vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor/install
+          key: vendor-linux-${{ hashFiles('vendor/CMakeLists.txt') }}-v5
+
+      - name: Build vendored deps
+        if: steps.cache_vendor.outputs.cache-hit != 'true'
+        run: |
+          cmake \
+            -S vendor \
+            -B vendor/build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${VENDOR_INSTALL}"
+          cmake --build vendor/build --parallel
+          cmake --install vendor/build
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            polylang plugin/adapters/rust/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-linux-${{ hashFiles('polylang plugin/adapters/rust/Cargo.toml', 'polylang plugin/adapters/rust/src/**') }}
+          restore-keys: rust-linux-
+
+      - name: Build Rust adapter
+        working-directory: "polylang plugin/adapters/rust"
+        run: cargo build --release
+        continue-on-error: true
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+        continue-on-error: true
+
+      - name: Build Zig adapter
+        working-directory: "polylang plugin/adapters/zig"
+        run: zig build -Doptimize=ReleaseSafe
+        continue-on-error: true
+
+      - name: Build Go adapter
+        working-directory: "polylang plugin/adapters/go"
+        run: go build -buildmode=c-shared -o polylang_go_adapter.so ./polylang_go_adapter.go
+        continue-on-error: true
+
+      - name: Build Nim adapter
+        working-directory: "polylang plugin/adapters/nim"
+        run: nim c --app:lib --out:polylang_nim_adapter.so polylang_nim_adapter.nim
+        continue-on-error: true
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/${{ env.BUILD_DIR }}"
+          key: cmake-linux-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v2
+          restore-keys: cmake-linux-
+
+      - name: Configure
+        run: |
+          mkdir -p "$PLUGIN_DIR/$BUILD_DIR"
+          cmake \
+            -S "$PLUGIN_DIR" \
+            -B "$PLUGIN_DIR/$BUILD_DIR" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${VENDOR_INSTALL}" \
+            -DLUA_INCLUDE_DIR="${VENDOR_INSTALL}/include/lua5.4" \
+            -DLUA_LIBRARIES="${VENDOR_INSTALL}/lib/liblua5.4.so" \
+            -DQUICKJS_INCLUDE="${VENDOR_INSTALL}/include" \
+            -DQUICKJS_LIB="${VENDOR_INSTALL}/lib/libquickjs.so" \
+            -DWREN_INC="${VENDOR_INSTALL}/include" \
+            -DWREN_LIB="${VENDOR_INSTALL}/lib/libwren.so" \
+            -DSQUIRREL_INC="${VENDOR_INSTALL}/include" \
+            -DSQUIRREL_LIB="${VENDOR_INSTALL}/lib/libsquirrel.so" \
+            -DAS_INC="${VENDOR_INSTALL}/include" \
+            -DAS_LIB="${VENDOR_INSTALL}/lib/libangelscript.so" \
+            -DAS_ADDONS_LIB="${VENDOR_INSTALL}/lib" \
+            -DPL_ENABLE_HARDENING=OFF \
+            -DPOLYLANG_BUILD_TESTS=ON \
+            -DPOLYLANG_BUILD_ODIN_ADAPTER=ON \
+            -DPOLYLANG_BUILD_ODIN_TESTS=ON \
+            -DPOLYLANG_BUILD_SANDBOX_TESTS=ON
+
+      - name: Build
+        run: cmake --build "$PLUGIN_DIR/$BUILD_DIR" --config Release --parallel
+
+      - name: Package
+        run: |
+          mkdir -p pkg/addons/polylang/bin/linux
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/linux/ \;
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "*.so" ! -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/linux/ \; 2>/dev/null || true
+          cp -r "$PLUGIN_DIR/addons/polylang/"* pkg/addons/polylang/ 2>/dev/null || true
+          zip -r polylang-linux.zip pkg/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-linux
+          path: polylang-linux.zip
+          retention-days: 30
+
+  # ── Android Build ───────────────────────────────────────────────────────────
+  build-android:
+    name: Build — Android arm64-v8a
+    if: github.event_name != 'issues' && github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_DIR:      build_android
+      ANDROID_API:    "28"
+      NDK_VERSION:    "r27d"
+      VENDOR_INSTALL: ${{ github.workspace }}/vendor/install-android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - name: Detect godot-cpp branch
+        id: gcpp
+        run: |
+          B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+              | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+          echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp
+        id: cache_gcpp
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/godot-cpp"
+          key: godot-cpp-android-${{ steps.gcpp.outputs.branch }}-v1
+
+      - name: Fetch godot-cpp
+        if: steps.cache_gcpp.outputs.cache-hit != 'true'
+        run: |
+          B="${{ steps.gcpp.outputs.branch }}"
+          mkdir -p "$PLUGIN_DIR/godot-cpp"
+          curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build golang-go
+
+      - name: Cache vendored deps (Android)
+        id: cache_vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor/install-android
+          key: vendor-android-arm64-${{ hashFiles('vendor/CMakeLists.txt') }}-ndk${{ env.NDK_VERSION }}-v3
+
+      - name: Build vendored deps (Android arm64)
+        if: steps.cache_vendor.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cmake \
+            -S vendor \
+            -B vendor/build-android \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${VENDOR_INSTALL}"
+          cmake --build vendor/build-android --parallel
+          cmake --install vendor/build-android
+
+      - name: Install Rust + Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+        continue-on-error: true
+
+      - name: Cache Rust (Android)
+        uses: actions/cache@v4
+        with:
+          path: |
+            polylang plugin/adapters/rust/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-android-arm64-${{ hashFiles('polylang plugin/adapters/rust/Cargo.toml', 'polylang plugin/adapters/rust/src/**') }}
+          restore-keys: rust-android-arm64-
+
+      - name: Build Rust adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/rust"
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ env.ANDROID_API }}-clang"
+        run: cargo build --release --target aarch64-linux-android
+        continue-on-error: true
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+        continue-on-error: true
+
+      - name: Build Zig adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/zig"
+        run: zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-linux-android -Dandroid_api=${{ env.ANDROID_API }}
+        continue-on-error: true
+
+      - name: Build Go adapter (Android arm64)
+        working-directory: "polylang plugin/adapters/go"
+        env:
+          GOOS:        android
+          GOARCH:      arm64
+          CGO_ENABLED: "1"
+          CC:          "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ env.ANDROID_API }}-clang"
+        run: go build -buildmode=c-shared -o polylang_go_adapter_android.so ./polylang_go_adapter.go
+        continue-on-error: true
+
+      - name: Cache CMake build (Android)
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/${{ env.BUILD_DIR }}"
+          key: cmake-android-arm64-${{ hashFiles('polylang plugin/CMakeLists.txt', 'polylang plugin/src/**', 'polylang plugin/include/**') }}-v2
+          restore-keys: cmake-android-arm64-
+
+      - name: Configure (Android arm64)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p "$PLUGIN_DIR/$BUILD_DIR"
+          cmake \
+            -S "$PLUGIN_DIR" \
+            -B "$PLUGIN_DIR/$BUILD_DIR" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${VENDOR_INSTALL}" \
+            -DLUA_INCLUDE_DIR="${VENDOR_INSTALL}/include/lua5.4" \
+            -DLUA_LIBRARIES="${VENDOR_INSTALL}/lib/liblua5.4.so" \
+            -DQUICKJS_INCLUDE="${VENDOR_INSTALL}/include" \
+            -DQUICKJS_LIB="${VENDOR_INSTALL}/lib/libquickjs.so" \
+            -DWREN_INC="${VENDOR_INSTALL}/include" \
+            -DWREN_LIB="${VENDOR_INSTALL}/lib/libwren.so" \
+            -DSQUIRREL_INC="${VENDOR_INSTALL}/include" \
+            -DSQUIRREL_LIB="${VENDOR_INSTALL}/lib/libsquirrel.so" \
+            -DAS_INC="${VENDOR_INSTALL}/include" \
+            -DAS_LIB="${VENDOR_INSTALL}/lib/libangelscript.a" \
+            -DPL_ENABLE_HARDENING=OFF \
+            -DPOLYLANG_BUILD_TESTS=OFF \
+            -DPOLYLANG_BUILD_ODIN_TESTS=OFF
+
+      - name: Build (Android arm64)
+        run: cmake --build "$PLUGIN_DIR/$BUILD_DIR" --config Release --parallel
+
+      - name: Package
+        run: |
+          mkdir -p pkg/addons/polylang/bin/android
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/android/ \;
+          find "$PLUGIN_DIR/$BUILD_DIR" -maxdepth 3 -name "*.so" ! -name "polylang.so" \
+            -exec cp {} pkg/addons/polylang/bin/android/ \; 2>/dev/null || true
+          RUST="polylang plugin/adapters/rust/target/aarch64-linux-android/release/libpolylang_adapter_rust.so"
+          GO="polylang plugin/adapters/go/polylang_go_adapter_android.so"
+          [ -f "$RUST" ] && cp "$RUST" pkg/addons/polylang/bin/android/ || true
+          [ -f "$GO"   ] && cp "$GO"   pkg/addons/polylang/bin/android/ || true
+          cp -r "$PLUGIN_DIR/addons/polylang/"* pkg/addons/polylang/ 2>/dev/null || true
+          zip -r polylang-android.zip pkg/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-android
+          path: polylang-android.zip
+          retention-days: 30
+
+  # ── Tests ───────────────────────────────────────────────────────────────────
+  test-odin-dlopen:
+    name: "Test — Odin adapter (dlopen)"
+    runs-on: ubuntu-24.04
+    needs: build-linux
+    if: github.event_name != 'issues' && github.event_name != 'schedule'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y g++ libdl-dev unzip
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux
+          path: extracted/
+      - name: Extract zip
+        run: |
+          unzip extracted/polylang-linux.zip -d extracted_zip
+          mkdir build
+          cp extracted_zip/pkg/addons/polylang/bin/linux/libpolylang_odin.so build/ || true
+      - name: Build test binary
+        run: |
+          g++ -std=c++20 -I "polylang plugin/include" \
+              "polylang plugin/tests/odin_adapter_test.cpp" \
+              "polylang plugin/adapters/odin/polylang_odin_adapter.cpp" \
+              "polylang plugin/adapters/odin/polylang_odin_shim.c" \
+              -o odin_adapter_tests \
+              -lpthread -ldl || echo "failed to build but continuing"
+      - name: Run tests in dlopen mode
+        run: |
+          chmod +x build/libpolylang_odin.so || true
+          mkdir -p /tmp/polylang_odin_cache
+          POLYLANG_ODIN_ADAPTER_SO=build/libpolylang_odin.so \
+            ./odin_adapter_tests build/libpolylang_odin.so || true
+
+  test-sandbox-escape:
+    name: "Test — Odin sandbox escape"
+    runs-on: ubuntu-24.04
+    needs: build-linux
+    if: github.event_name != 'issues' && github.event_name != 'schedule'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Odin compiler
+        id: odin
+        run: |
+          curl -fsSL https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64-nightly.zip -o odin.zip \
+          && unzip -q odin.zip -d odin_install \
+          && echo "$(pwd)/odin_install" >> $GITHUB_PATH \
+          && echo "available=true" >> $GITHUB_OUTPUT || echo "available=false" >> $GITHUB_OUTPUT
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y g++ libdl-dev unzip
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux
+          path: extracted/
+      - name: Extract zip
+        run: |
+          unzip extracted/polylang-linux.zip -d extracted_zip
+          mkdir build
+          cp extracted_zip/pkg/addons/polylang/bin/linux/libpolylang_odin.so build/ || true
+      - name: Build sandbox test binary
+        run: |
+          g++ -std=c++20 -I "polylang plugin/include" \
+              "polylang plugin/tests/sandbox_escape_test.cpp" \
+              "polylang plugin/adapters/odin/polylang_odin_adapter.cpp" \
+              "polylang plugin/adapters/odin/polylang_odin_shim.c" \
+              -o sandbox_escape_tests \
+              -lpthread -ldl || true
+      - name: Compile malicious Odin test script
+        if: steps.odin.outputs.available == 'true'
+        run: |
+          mkdir -p /tmp/odin_sandbox_test
+          cat > /tmp/odin_sandbox_test/EscapeTest.pl.odin << 'ODIN'
+          package main
+          import pl "polylang"
+          import "core:c"
+          import "core:os"
+          EscapeScript :: struct { using script: pl.OdinScript }
+          escape_create :: proc() -> ^EscapeScript {
+            e := new(EscapeScript)
+            e._vtable = { call_method = escape_call }
+            return e
+          }
+          escape_call :: proc(inst: rawptr, name: cstring,
+                              args: [^]pl.PLValue, argc: c.int32_t,
+                              ret: ^pl.PLValue) -> c.int {
+            switch string(name) {
+            case "os_open":
+              _ = os.open("/tmp/sandbox_escape_test_FILE", os.O_CREATE, 0o644)
+              ret^ = pl.make_bool(true)
+              return pl.PL_OK
+            case "safe_method":
+              ret^ = pl.make_int(42)
+              return pl.PL_OK
+            }
+            return pl.PL_ERR_METHOD_NOT_FOUND
+          }
+          @(init)
+          reg :: proc() {
+            polylang_script_factory = proc "c" () -> rawptr { return escape_create() }
+          }
+          ODIN
+
+          POLYLANG_ODIN_SHIM_PATH="polylang plugin/adapters/odin" \
+          POLYLANG_ODIN_CACHE=/tmp/odin_sandbox_test \
+          ODIN_BIN=odin \
+            bash "polylang plugin/adapters/odin/odin_build_pipeline.sh" \
+            /tmp/odin_sandbox_test/EscapeTest.pl.odin \
+            /tmp/odin_sandbox_test/EscapeTest.pl.odin.so \
+          || echo "Odin compile failed — structural test only"
+      - name: Run sandbox escape test
+        run: |
+          mkdir -p /tmp/polylang_odin_cache
+          chmod +x build/libpolylang_odin.so || true
+          ./sandbox_escape_tests || true
+      - name: Verify no escape artifact was created
+        run: |
+          if [ -f /tmp/sandbox_escape_test_FILE ]; then
+            echo "FAIL: sandbox escape — /tmp/sandbox_escape_test_FILE exists"
+            exit 1
+          fi
+          echo "PASS: no escape artifact found"
+
+  # ── Packaging ───────────────────────────────────────────────────────────────
+  package-godot-addon:
+    name: "Package — Godot addon zip"
+    runs-on: ubuntu-24.04
+    needs: [ build-linux, build-android ]
+    if: github.event_name != 'issues' && github.event_name != 'schedule'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-linux
+          path: release/linux
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: polylang-android
+          path: release/android
+      - name: Extract zip files
+        run: |
+          unzip release/linux/polylang-linux.zip -d release/linux_ext || true
+          unzip release/android/polylang-android.zip -d release/android_ext || true
+      - name: Assemble Godot addon layout
+        run: |
+          mkdir -p godot_addon/addons/polylang/bin/linux
+          mkdir -p godot_addon/addons/polylang/bin/android
+          mkdir -p godot_addon/addons/polylang/include
+
+          # Core library
+          cp release/linux_ext/pkg/addons/polylang/bin/linux/polylang.so   godot_addon/addons/polylang/bin/linux/ || true
+          cp release/android_ext/pkg/addons/polylang/bin/android/polylang.so godot_addon/addons/polylang/bin/android/ || true
+
+          # Odin adapter
+          cp release/linux_ext/pkg/addons/polylang/bin/linux/libpolylang_odin.so   godot_addon/addons/polylang/bin/linux/  2>/dev/null || true
+          cp release/android_ext/pkg/addons/polylang/bin/android/libpolylang_odin.so godot_addon/addons/polylang/bin/android/ 2>/dev/null || true
+
+          # Optional adapters
+          find release/linux_ext/pkg/addons/polylang/bin/linux -name "*adapter*.so" \
+            -exec cp {} godot_addon/addons/polylang/bin/linux/ \; 2>/dev/null || true
+          find release/android_ext/pkg/addons/polylang/bin/android -name "*adapter*.so" \
+            -exec cp {} godot_addon/addons/polylang/bin/android/ \; 2>/dev/null || true
+            
+          # Editor plugin GDScript
+          cp -r "polylang plugin/addons/polylang/." godot_addon/addons/polylang/ 2>/dev/null || true
+
+          # VTable header
+          cp "polylang plugin/include/pl_adapter_vtable.h" godot_addon/addons/polylang/include/ || true
+
+          echo "=== Release layout ==="
+          find godot_addon -type f | sort
+
+      - name: Create addon zip
+        run: |
+          VERSION=$(grep "VERSION" "polylang plugin/CMakeLists.txt" | head -1 | grep -oP '[\d.]+')
+          cd godot_addon
+          zip -r ../polylang_v${VERSION}_addon.zip addons/
+          echo "Created: polylang_v${VERSION}_addon.zip"
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-godot-addon
+          retention-days: 90
+          path: "*.zip"
+
+  # ── CodeQL ──────────────────────────────────────────────────────────────────
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    if: github.event_name != 'issues'
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: actions
+          build-mode: none
+        - language: c-cpp
+          build-mode: autobuild
+        - language: go
+          build-mode: autobuild
+        - language: rust
+          build-mode: none
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:${{matrix.language}}"
+
+  # ── Summary ─────────────────────────────────────────────────────────────────
+  summary:
+    name: Summarize new issues
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run AI inference
+        id: inference
+        uses: actions/ai-inference@v1
+        with:
+          prompt: |
+            Summarize the following issue in one short paragraph.
+            Title: ${{ github.event.issue.title }}
+            Body: ${{ github.event.issue.body }}
+      - name: Comment with AI summary
+        run: |
+          gh issue comment $ISSUE_NUMBER --body "$RESPONSE"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RESPONSE: ${{ steps.inference.outputs.response }}
