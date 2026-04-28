@@ -162,8 +162,20 @@ PUBLIC GetReturnedFloat
 
 GetReturnedFloat PROC FRAME
 
+	; PROLOG: Store registers and allocate stack space
+	
+	sub rsp, 8   ; We'll need 4 bytes for temporary storage (8 bytes with alignment)
+.allocstack 8
 .endprolog
-	movd eax, xmm0
+
+	; Move the float value from the XMM0 register to RAX register
+	movss dword ptr [rsp], xmm0
+	mov   eax, dword ptr [rsp]
+	
+	; EPILOG: Clean up
+	
+	add rsp, 8
+
 	ret
 
 GetReturnedFloat ENDP
@@ -175,8 +187,20 @@ PUBLIC GetReturnedDouble
 
 GetReturnedDouble PROC FRAME
 
+	; PROLOG: Store registers and allocate stack space
+	
+	sub rsp, 8	; We'll need 8 bytes for temporary storage
+.allocstack 8
 .endprolog
-	movq rax, xmm0
+
+	; Move the double value from the XMM0 register to the RAX register
+	movlpd qword ptr [rsp], xmm0
+	mov    rax, qword ptr [rsp]
+	
+	; EPILOG: Clean up
+	
+	add rsp, 8
+	
 	ret
 	
 GetReturnedDouble ENDP
