@@ -4,14 +4,43 @@ on:
   push:
     branches: [main, winfix, win-fix]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 env:
   PLUGIN_DIR: "polylang plugin"
 
 jobs:
+  # ── Analyze Stage ───────────────────────────────────────────────────
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, c-cpp, go, rust]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: autobuild
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{matrix.language}}"
+
+  # ── Build Stage ─────────────────────────────────────────────────────
   build:
-    name: ${{ matrix.name }}
+    name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -45,12 +74,10 @@ jobs:
         shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
 
     steps:
-      # ── Checkout ─────────────────────────────────────────────────────────
       - name: Checkout (${{ matrix.branch }})
         uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
-          submodules: false
 
       # ── Linux / Android Setup ────────────────────────────────────────────
       - name: "[Linux/Android] Detect godot-cpp branch"
@@ -310,35 +337,6 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Install Zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-        continue-on-error: true
-
-      - name: Build Zig adapter
-        working-directory: "${{ env.PLUGIN_DIR }}/adapters/zig"
-        run: |
-          if [ "${{ matrix.platform }}" == "android" ]; then
-            zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-linux-android -Dandroid_api=28
-          else
-            zig build -Doptimize=ReleaseSafe
-          fi
-        continue-on-error: true
-
-      - name: Build Go adapter
-        working-directory: "${{ env.PLUGIN_DIR }}/adapters/go"
-        run: |
-          if [ "${{ matrix.platform }}" == "android" ]; then
-            export GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
-            go build -buildmode=c-shared -o polylang_go_adapter_android.so ./polylang_go_adapter.go
-          elif [ "${{ matrix.platform }}" == "windows" ]; then
-            go build -buildmode=c-shared -o polylang_go_adapter.dll ./polylang_go_adapter.go
-          else
-            go build -buildmode=c-shared -o polylang_go_adapter.so ./polylang_go_adapter.go
-          fi
-        continue-on-error: true
-
       # ── CMake Plugin Build ───────────────────────────────────────────────
       - name: Configure and Build Plugin
         run: |
@@ -346,38 +344,109 @@ jobs:
           $b = (Join-Path $s "${{ matrix.build_dir }}").Replace('\', '/')
           $vendor = (Resolve-Path "${{ matrix.vendor_path }}").Path.Replace('\', '/')
           New-Item -ItemType Directory -Force -Path $b | Out-Null
-          
           $CMAKE_FLAGS = @("-S", "$s", "-B", "$b", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_PREFIX_PATH=$vendor")
-          
           if ("${{ matrix.platform }}" -eq "windows") {
             $CMAKE_FLAGS += @("-G", "Visual Studio 17 2022", "-T", "ClangCL", "-A", "x64", "-DCMAKE_PROJECT_INCLUDE=$s/CMakeLists.windows.cmake")
           } else {
             $CMAKE_FLAGS += @("-G", "Ninja")
           }
-          
           if ("${{ matrix.platform }}" -eq "android") {
             $ndk = "${{ steps.ndk.outputs.ndk-path }}".Replace('\', '/')
             $CMAKE_FLAGS += @("-DCMAKE_TOOLCHAIN_FILE=$ndk/build/cmake/android.toolchain.cmake", "-DANDROID_ABI=arm64-v8a", "-DANDROID_PLATFORM=android-28")
           }
-          
           cmake @CMAKE_FLAGS
           cmake --build $b --config Release --parallel
         shell: pwsh
 
-      # ── Package and Upload ──────────────────────────────────────────────
-      - name: Package
+      # ── Export Binaries ──────────────────────────────────────────────────
+      - name: Prepare Binaries
         run: |
-          mkdir -p pkg/addons/polylang/bin/${{ matrix.platform }}
+          mkdir bin_out
           EXT="${{ matrix.platform == 'windows' && 'dll' || 'so' }}"
-          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "polylang.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
-          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "*adapter*.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
-          cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/polylang/
-          zip -r ${{ matrix.artifact_name }}.zip pkg/
+          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "polylang.$EXT" -exec cp {} bin_out/ \;
+          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "*adapter*.$EXT" -exec cp {} bin_out/ \;
         shell: bash
 
-      - name: Upload Artifact
+      - name: Upload Raw Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}.zip
+          name: binaries-${{ matrix.platform }}
+          path: bin_out/
+
+  # ── Test Stage ──────────────────────────────────────────────────────
+  test:
+    name: Test (${{ matrix.name }})
+    needs: [build]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        test_type: [odin_adapter, sandbox_escape]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Linux Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-linux
+          path: bin_linux
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential git
+
+      - name: Build and Run Test
+        run: |
+          cmake -S "${{ env.PLUGIN_DIR }}" -B build_tests -G Ninja \
+            -DPOLYLANG_BUILD_TESTS=ON \
+            -DPOLYLANG_BUILD_ODIN_TESTS=ON \
+            -DPOLYLANG_BUILD_SANDBOX_TESTS=ON
+          
+          if [ "${{ matrix.test_type }}" == "odin_adapter" ]; then
+            cmake --build build_tests --target polylang_odin_tests
+            ./build_tests/polylang_odin_tests
+          else
+            cmake --build build_tests --target polylang_sandbox_escape_test
+            ./build_tests/polylang_sandbox_escape_test
+          fi
+
+  # ── Package Stage ───────────────────────────────────────────────────
+  package:
+    name: Package — Godot addon zip
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: all_bins
+
+      - name: Assemble Plugin Structure
+        run: |
+          mkdir -p pkg/addons/polylang/bin/linux
+          mkdir -p pkg/addons/polylang/bin/android
+          mkdir -p pkg/addons/polylang/bin/windows
+          
+          # Move binaries to correct locations
+          # Note: download-artifact@v4 puts them in subfolders named after the artifact
+          cp all_bins/binaries-linux/* pkg/addons/polylang/bin/linux/
+          cp all_bins/binaries-android/* pkg/addons/polylang/bin/android/
+          cp all_bins/binaries-windows/* pkg/addons/polylang/bin/windows/
+          
+          # Copy static files (GDScript, icons, etc.)
+          cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/polylang/
+          
+          # Create ZIP
+          cd pkg
+          zip -r ../polylang-addon.zip addons/
+          
+      - name: Upload Final Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: polylang-addon-integrated
+          path: polylang-addon.zip
           retention-days: 30
