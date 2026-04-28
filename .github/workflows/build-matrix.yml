@@ -1,0 +1,383 @@
+name: PolyLang — Build Matrix
+
+on:
+  push:
+    branches: [main, winfix, win-fix]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PLUGIN_DIR: "polylang plugin"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, android, windows]
+        include:
+          - platform: linux
+            name: Linux x86_64
+            os: ubuntu-24.04
+            branch: main
+            artifact_name: polylang-linux
+            build_dir: build_linux
+            vendor_path: vendor/install
+          - platform: android
+            name: Android arm64-v8a
+            os: ubuntu-24.04
+            branch: main
+            artifact_name: polylang-android
+            build_dir: build_android
+            vendor_path: vendor/install-android
+          - platform: windows
+            name: Windows x64
+            os: windows-2022
+            branch: winfix
+            artifact_name: polylang-windows
+            build_dir: build_windows
+            vendor_path: vendor/install-windows
+
+    defaults:
+      run:
+        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout (${{ matrix.branch }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          submodules: false
+
+      # ── Linux / Android Setup ────────────────────────────────────────────
+      - name: [Linux/Android] Detect godot-cpp branch
+        if: matrix.platform != 'windows'
+        id: gcpp_linux
+        run: |
+          B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+              | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+          echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
+
+      - name: [Linux/Android] Cache godot-cpp
+        if: matrix.platform != 'windows'
+        id: cache_gcpp_linux
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/godot-cpp"
+          key: godot-cpp-${{ matrix.platform }}-${{ steps.gcpp_linux.outputs.branch }}-v1
+
+      - name: [Linux/Android] Fetch godot-cpp
+        if: matrix.platform != 'windows' && steps.cache_gcpp_linux.outputs.cache-hit != 'true'
+        run: |
+          B="${{ steps.gcpp_linux.outputs.branch }}"
+          mkdir -p "$PLUGIN_DIR/godot-cpp"
+          curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
+
+      # ── Windows Setup ────────────────────────────────────────────────────
+      - name: [Windows] Cache godot-cpp
+        if: matrix.platform == 'windows'
+        id: cache_gcpp_win
+        uses: actions/cache@v4
+        with:
+          path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
+          key: godot-cpp-windows-detected-v5
+
+      - name: [Windows] Fetch godot-cpp
+        if: matrix.platform == 'windows' && steps.cache_gcpp_win.outputs.cache-hit != 'true'
+        run: |
+          $dest = Join-Path "${{ github.workspace }}" "$env:PLUGIN_DIR\godot-cpp"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $branch = (git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | Select-String 'ref: refs/heads/(.*)\s+HEAD').Matches[0].Groups[1].Value
+          if (-not $branch) { $branch = "master" }
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$branch.zip"
+          Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
+          Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
+          $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
+          Get-ChildItem $inner.FullName | Move-Item -Destination $dest
+          Remove-Item _gcpp_tmp, godot-cpp.zip -Recurse -Force
+
+      # ── System Dependencies ─────────────────────────────────────────────
+      - name: [Android] Setup NDK
+        if: matrix.platform == 'android'
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: "r27d"
+          add-to-path: true
+
+      - name: [Linux/Android] Install build tools
+        if: matrix.platform != 'windows'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build golang-go zip
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            sudo apt-get install -y --no-install-recommends \
+              build-essential git libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
+              libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \
+              libwayland-dev libxkbcommon-dev python3-dev dotnet-sdk-8.0
+          fi
+
+      # ── Vendored Dependencies ───────────────────────────────────────────
+      - name: Cache vendored deps (${{ matrix.platform }})
+        id: cache_vendor
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.vendor_path }}
+          key: vendor-${{ matrix.platform }}-${{ hashFiles('vendor/CMakeLists.txt') }}-v6
+
+      - name: [Linux/Android] Build vendored deps
+        if: matrix.platform != 'windows' && steps.cache_vendor.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          FLAGS=""
+          if [ "${{ matrix.platform }}" == "android" ]; then
+            FLAGS="-DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28"
+          fi
+          cmake -S vendor -B vendor/build-${{ matrix.platform }} -G Ninja $FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/${{ matrix.vendor_path }}"
+          cmake --build vendor/build-${{ matrix.platform }} --parallel
+          cmake --install vendor/build-${{ matrix.platform }}
+
+      - name: [Windows] Build vendored deps
+        if: matrix.platform == 'windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
+          @"
+          #ifndef MSVC_UTIME_H
+          #define MSVC_UTIME_H
+          #include <sys/utime.h>
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/utime.h"
+          @"
+          #ifndef MSVC_DIRENT_H
+          #define MSVC_DIRENT_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <windows.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          typedef struct dirent { char d_name[MAX_PATH]; } dirent;
+          typedef struct DIR { HANDLE hFind; WIN32_FIND_DATAA fd; dirent ent; int first; } DIR;
+          static inline DIR* opendir(const char* name) {
+              DIR* dir = (DIR*)malloc(sizeof(DIR));
+              char path[MAX_PATH]; snprintf(path, MAX_PATH, "%s\\*", name);
+              dir->hFind = FindFirstFileA(path, &dir->fd);
+              if (dir->hFind == INVALID_HANDLE_VALUE) { free(dir); return NULL; }
+              dir->first = 1; return dir;
+          }
+          static inline struct dirent* readdir(DIR* dir) {
+              if (dir->first) { dir->first = 0; }
+              else if (!FindNextFileA(dir->hFind, &dir->fd)) return NULL;
+              strncpy(dir->ent.d_name, dir->fd.cFileName, MAX_PATH);
+              return &dir->ent;
+          }
+          static inline void closedir(DIR* dir) { if (dir->hFind != INVALID_HANDLE_VALUE) FindClose(dir->hFind); free(dir); }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/dirent.h"
+          @"
+          #ifndef MSVC_SYS_WAIT_H
+          #define MSVC_SYS_WAIT_H
+          #define WIFEXITED(s) (1)
+          #define WEXITSTATUS(s) (s)
+          #define WIFSIGNALED(s) (0)
+          #define WTERMSIG(s) (0)
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/wait.h"
+          @"
+          #ifndef MSVC_UNISTD_H
+          #define MSVC_UNISTD_H
+          #include <io.h>
+          #include <stdint.h>
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <process.h>
+          #include <direct.h>
+          #include <windows.h>
+          #define STDIN_FILENO 0
+          #define STDOUT_FILENO 1
+          #define STDERR_FILENO 2
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
+          #endif
+          static inline void usleep(unsigned int us) { Sleep(us / 1000); }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/unistd.h"
+          @"
+          #ifndef MSVC_POSIX_FIXUP_H
+          #define MSVC_POSIX_FIXUP_H
+          #include <stdio.h>
+          #include <sys/stat.h>
+          #include <stdint.h>
+          #define popen _popen
+          #define pclose _pclose
+          #ifndef S_IFMT
+          #define S_IFMT  0170000
+          #endif
+          #ifndef S_IFDIR
+          #define S_IFDIR 0040000
+          #endif
+          #ifndef S_IFREG
+          #define S_IFREG 0100000
+          #endif
+          #ifndef S_ISDIR
+          #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+          #endif
+          #ifndef S_ISREG
+          #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+          #endif
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
+          #endif
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/msvc_posix_fixup.h"
+          @"
+          #ifndef MSVC_SYS_TIME_H
+          #define MSVC_SYS_TIME_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <winsock2.h>
+          #include <windows.h>
+          #include <time.h>
+          static inline int gettimeofday(struct timeval *tp, void *tzp) {
+              if (tp) {
+                  FILETIME ft; unsigned __int64 t;
+                  GetSystemTimeAsFileTime(&ft);
+                  t = ((unsigned __int64)ft.dwHighDateTime << 32) | (unsigned __int64)ft.dwLowDateTime;
+                  t -= 116444736000000000LL;
+                  tp->tv_sec = (long)(t / 10000000ULL);
+                  tp->tv_usec = (long)((t % 10000000ULL) / 10ULL);
+              }
+              return 0;
+          }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/time.h"
+          @"
+          #ifndef MSVC_PTHREAD_H
+          #define MSVC_PTHREAD_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <windows.h>
+          #include <time.h>
+          typedef void* pthread_t;
+          typedef void* pthread_mutex_t;
+          typedef void* pthread_cond_t;
+          typedef void* pthread_attr_t;
+          #define PTHREAD_MUTEX_INITIALIZER {0}
+          static inline int clock_gettime(int clk_id, struct timespec *tp) { return 0; }
+          static inline int pthread_mutex_init(pthread_mutex_t* m, void* a) { return 0; }
+          static inline int pthread_mutex_destroy(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_mutex_lock(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_mutex_unlock(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_create(pthread_t* t, void* a, void* (*f)(void*), void* p) { return 0; }
+          static inline int pthread_join(pthread_t t, void** r) { return 0; }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/pthread.h"
+          Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
+
+          $v = (Resolve-Path vendor).Path.Replace('\', '/')
+          $shim = (Get-Item vendor/msvc_shim).FullName.Replace('\','/')
+          cmake -S vendor -B vendor/build-windows -G "Visual Studio 17 2022" -T ClangCL -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/${{ matrix.vendor_path }}" -DCMAKE_PROJECT_INCLUDE="$v/CMakeLists.windows.cmake" -DCMAKE_C_FLAGS="-I$shim -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h /FI $shim/msvc_posix_fixup.h" -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
+          cmake --build vendor/build-windows --config Release --parallel
+          cmake --install vendor/build-windows --config Release
+
+      # ── Language Adapters ────────────────────────────────────────────────
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'android' && 'aarch64-linux-android' || '' }}
+        continue-on-error: true
+
+      - name: Build Rust adapter
+        working-directory: "${{ env.PLUGIN_DIR }}/adapters/rust"
+        run: |
+          if [ "${{ matrix.platform }}" == "android" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
+            cargo build --release --target aarch64-linux-android
+          else
+            cargo build --release
+          fi
+        continue-on-error: true
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+        continue-on-error: true
+
+      - name: Build Zig adapter
+        working-directory: "${{ env.PLUGIN_DIR }}/adapters/zig"
+        run: |
+          if [ "${{ matrix.platform }}" == "android" ]; then
+            zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-linux-android -Dandroid_api=28
+          else
+            zig build -Doptimize=ReleaseSafe
+          fi
+        continue-on-error: true
+
+      - name: Build Go adapter
+        working-directory: "${{ env.PLUGIN_DIR }}/adapters/go"
+        run: |
+          if [ "${{ matrix.platform }}" == "android" ]; then
+            export GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
+            go build -buildmode=c-shared -o polylang_go_adapter_android.so ./polylang_go_adapter.go
+          elif [ "${{ matrix.platform }}" == "windows" ]; then
+            go build -buildmode=c-shared -o polylang_go_adapter.dll ./polylang_go_adapter.go
+          else
+            go build -buildmode=c-shared -o polylang_go_adapter.so ./polylang_go_adapter.go
+          fi
+        continue-on-error: true
+
+      # ── CMake Plugin Build ───────────────────────────────────────────────
+      - name: Configure and Build Plugin
+        run: |
+          $s = (Resolve-Path "$env:PLUGIN_DIR").Path.Replace('\', '/')
+          $b = (Join-Path $s "${{ matrix.build_dir }}").Replace('\', '/')
+          $vendor = (Resolve-Path "${{ matrix.vendor_path }}").Path.Replace('\', '/')
+          New-Item -ItemType Directory -Force -Path $b | Out-Null
+          
+          $CMAKE_FLAGS = @("-S", "$s", "-B", "$b", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_PREFIX_PATH=$vendor")
+          
+          if ("${{ matrix.platform }}" -eq "windows") {
+            $CMAKE_FLAGS += @("-G", "Visual Studio 17 2022", "-T", "ClangCL", "-A", "x64", "-DCMAKE_PROJECT_INCLUDE=$s/CMakeLists.windows.cmake")
+          } else {
+            $CMAKE_FLAGS += @("-G", "Ninja")
+          }
+          
+          if ("${{ matrix.platform }}" -eq "android") {
+            $ndk = "${{ steps.ndk.outputs.ndk-path }}".Replace('\', '/')
+            $CMAKE_FLAGS += @("-DCMAKE_TOOLCHAIN_FILE=$ndk/build/cmake/android.toolchain.cmake", "-DANDROID_ABI=arm64-v8a", "-DANDROID_PLATFORM=android-28")
+          }
+          
+          cmake @CMAKE_FLAGS
+          cmake --build $b --config Release --parallel
+        shell: pwsh
+
+      # ── Package and Upload ──────────────────────────────────────────────
+      - name: Package
+        run: |
+          mkdir -p pkg/addons/polylang/bin/${{ matrix.platform }}
+          EXT="${{ matrix.platform == 'windows' && 'dll' || 'so' }}"
+          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "polylang.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
+          find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "*adapter*.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
+          cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/polylang/
+          zip -r ${{ matrix.artifact }}.zip pkg/
+        shell: bash
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+          retention-days: 30
