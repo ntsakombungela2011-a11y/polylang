@@ -23,6 +23,8 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <cstdint>
+
 #include "../include/pl_adapter_vtable.h"
 
 #if defined(_WIN32)
@@ -44,8 +46,9 @@ static int g_pass = 0, g_fail = 0;
     if ((got) == (expected)) {                                    \
         printf("  PASS  %s\n", msg); ++g_pass;                   \
     } else {                                                      \
-        printf("  FAIL  %s (got %d, expected %d)\n",             \
-               msg, (int)(got), (int)(expected)); ++g_fail;       \
+        printf("  FAIL  %s (got %lu, expected %lu)\n",           \
+               msg, (unsigned long)(uintptr_t)(got),             \
+               (unsigned long)(uintptr_t)(expected)); ++g_fail;  \
     }                                                             \
 } while(0)
 
@@ -58,6 +61,24 @@ static int g_pass = 0, g_fail = 0;
 } while(0)
 
 #define ASSERT_TRUE(cond, msg) ASSERT_NE(cond, false, msg)
+
+typedef struct OdinRuntimeServices {
+    void     (*signal_emit)(const char*, PLValue*, int32_t);
+    uint64_t (*signal_connect)(const char*, void(*)(PLValue*, int32_t, void*), void*);
+    void     (*signal_disconnect)(uint64_t);
+    int      (*bridge_call)(const char*, const char*, PLValue*, int32_t, PLValue*);
+    int      (*resource_fetch)(const char*, PLValue*);
+    void     (*resource_release)(PLValue*);
+    void     (*profiler_begin)(const char*);
+    void     (*profiler_end)(const char*);
+} OdinRuntimeServices;
+
+// ── Linkage for statically linked adapter fallback ──────────
+extern "C" {
+    void odin_fill_vtable(PLAdapterVTable* out);
+    typedef void (*SetServicesFn)(const OdinRuntimeServices*);
+    void odin_adapter_set_services(const OdinRuntimeServices* svc);
+}
 
 // ── Stub runtime services (no Godot present) ─────────────────
 static void stub_signal_emit(const char*, PLValue*, int32_t) {}
@@ -77,17 +98,6 @@ static void stub_profiler_begin(const char* label) {
 static void stub_profiler_end(const char* label) {
     printf("    [profiler_end]   %s\n", label ? label : "(null)");
 }
-
-typedef struct OdinRuntimeServices {
-    void     (*signal_emit)(const char*, PLValue*, int32_t);
-    uint64_t (*signal_connect)(const char*, void(*)(PLValue*, int32_t, void*), void*);
-    void     (*signal_disconnect)(uint64_t);
-    int      (*bridge_call)(const char*, const char*, PLValue*, int32_t, PLValue*);
-    int      (*resource_fetch)(const char*, PLValue*);
-    void     (*resource_release)(PLValue*);
-    void     (*profiler_begin)(const char*);
-    void     (*profiler_end)(const char*);
-} OdinRuntimeServices;
 
 static const OdinRuntimeServices g_stub_services = {
     stub_signal_emit, stub_signal_connect, stub_signal_disconnect,
@@ -268,8 +278,6 @@ int main(int argc, char** argv) {
 
         // Fallback: if the adapter is compiled into the test binary,
         // call odin_fill_vtable() directly.
-        // This allows CI to run the ABI tests even without a pre-built .so.
-        extern void odin_fill_vtable(PLAdapterVTable*);
         PLAdapterVTable vt{};
         odin_fill_vtable(&vt);
 
@@ -297,7 +305,6 @@ int main(int argc, char** argv) {
         fn(&vt);
 
         // Inject stub services before any compile/instantiate.
-        typedef void (*SetServicesFn)(const OdinRuntimeServices*);
         SetServicesFn set_svc = reinterpret_cast<SetServicesFn>(
             DL_SYM(dl, "odin_adapter_set_services"));
         if (set_svc) set_svc(&g_stub_services);
