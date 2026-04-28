@@ -336,6 +336,8 @@ jobs:
 
           $v = (Resolve-Path vendor).Path.Replace('\', '/')
           $shim = (Get-Item vendor/msvc_shim).FullName.Replace('\','/')
+          # Force clean build directory to avoid CMake cache mismatch
+          if (Test-Path "vendor/build-windows") { Remove-Item -Recurse -Force "vendor/build-windows" }
           cmake -S vendor -B vendor/build-windows -G "Visual Studio 17 2022" -T ClangCL -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/${{ matrix.vendor_path }}" -DCMAKE_PROJECT_INCLUDE="$v/CMakeLists.windows.cmake" -DCMAKE_C_FLAGS="-I$shim -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h /FI $shim/msvc_posix_fixup.h" -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor/build-windows --config Release --parallel
           cmake --install vendor/build-windows --config Release
@@ -364,6 +366,8 @@ jobs:
           $s = (Resolve-Path "$env:PLUGIN_DIR").Path.Replace('\', '/')
           $b = (Join-Path $s "${{ matrix.build_dir }}").Replace('\', '/')
           $vendor = (Resolve-Path "${{ matrix.vendor_path }}").Path.Replace('\', '/')
+          # Force clean build directory to avoid CMake cache mismatch
+          if (Test-Path $b) { Remove-Item -Recurse -Force $b }
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           $CMAKE_FLAGS = @("-S", "$s", "-B", "$b", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_PREFIX_PATH=$vendor")
           if ("${{ matrix.platform }}" -eq "windows") {
