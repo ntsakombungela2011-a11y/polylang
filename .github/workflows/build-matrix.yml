@@ -97,8 +97,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Try matrix branch, fallback to current ref if it fails or doesn't exist
-          ref: ${{ matrix.branch || github.ref_name }}
+          # Checkout the current branch/ref
+          ref: ${{ github.ref_name }}
 
       # ── Linux / Android Setup ────────────────────────────────────────────
       - name: "[Linux/Android] Detect godot-cpp branch"
@@ -396,7 +396,7 @@ jobs:
 
   # ── Test Stage ──────────────────────────────────────────────────────
   test:
-    name: Test (${{ matrix.name }})
+    name: Test (${{ matrix.test_type }})
     needs: [build]
     runs-on: ubuntu-24.04
     strategy:
