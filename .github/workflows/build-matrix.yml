@@ -22,7 +22,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, c-cpp, go, rust]
+        include:
+          - language: actions
+            build_mode: none
+          - language: c-cpp
+            build_mode: manual
+          - language: go
+            build_mode: autobuild
+          - language: rust
+            build_mode: none
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,7 +39,22 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          build-mode: autobuild
+          build-mode: ${{ matrix.build_mode }}
+
+      - name: "[C/C++] Manual Build"
+        if: matrix.language == 'c-cpp'
+        run: |
+          # Fetch godot-cpp if missing
+          if [ ! -d "${{ env.PLUGIN_DIR }}/godot-cpp/include" ]; then
+            B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+                | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+            mkdir -p "${{ env.PLUGIN_DIR }}/godot-cpp"
+            curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B:-4.3}.tar.gz" \
+              | tar -xz --strip-components=1 -C "${{ env.PLUGIN_DIR }}/godot-cpp"
+          fi
+          # Configure and build enough to trigger extraction
+          cmake -S "${{ env.PLUGIN_DIR }}" -B build_analyze -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build_analyze --parallel 2
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
@@ -50,21 +73,18 @@ jobs:
           - platform: linux
             name: Linux x86_64
             os: ubuntu-24.04
-            branch: main
             artifact_name: polylang-linux
             build_dir: build_linux
             vendor_path: vendor/install
           - platform: android
             name: Android arm64-v8a
             os: ubuntu-24.04
-            branch: main
             artifact_name: polylang-android
             build_dir: build_android
             vendor_path: vendor/install-android
           - platform: windows
             name: Windows x64
             os: windows-2022
-            branch: winfix
             artifact_name: polylang-windows
             build_dir: build_windows
             vendor_path: vendor/install-windows
@@ -74,10 +94,11 @@ jobs:
         shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
 
     steps:
-      - name: Checkout (${{ matrix.branch }})
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.branch }}
+          # Try matrix branch, fallback to current ref if it fails or doesn't exist
+          ref: ${{ matrix.branch || github.ref_name }}
 
       # ── Linux / Android Setup ────────────────────────────────────────────
       - name: "[Linux/Android] Detect godot-cpp branch"
