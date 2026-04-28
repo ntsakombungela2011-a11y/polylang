@@ -27,10 +27,6 @@
 #include "pl_state_transfer.hpp"
 #include "pl_bridge.hpp"
 #include "pl_cross_inherit.hpp"
-// MSVC requires the explicit include for godot::gdextension_interface symbols
-// (script_instance_create3 etc.). GCC/Clang resolve them via transitive includes
-// but MSVC is stricter about extern "C" declarations across translation units.
-#include <godot_cpp/core/gdextension_interface_loader.hpp>
 
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/classes/engine.hpp>

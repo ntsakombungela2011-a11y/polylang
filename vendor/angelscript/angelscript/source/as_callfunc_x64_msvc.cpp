@@ -195,9 +195,6 @@ asQWORD CallSystemFunctionNative(asCContext *context, asCScriptFunction *descr, 
 		allArgBuffer[paramSize++] = (asQWORD)secondObject;
 	}
 
-	// Ensure the argument buffer (fixed at 64 QWORDs) is not exceeded
-	asASSERT(paramSize <= 64);
-
 	retQW = CallX64(allArgBuffer, floatArgBuffer, paramSize*8, (asPWORD)func);
 
 	// If the return is a float value we need to get the value from the FP register
@@ -216,3 +213,5 @@ END_AS_NAMESPACE
 
 #endif // AS_X64_MSVC
 #endif // AS_MAX_PORTABILITY
+
+

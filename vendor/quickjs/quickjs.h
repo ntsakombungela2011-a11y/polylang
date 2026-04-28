@@ -28,12 +28,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <math.h>
-
-/* Ensure NAN is defined on MSVC / non-POSIX environments */
-#ifndef NAN
-#define NAN (0.0/0.0)
-#endif
 
 #ifdef __cplusplus
 extern "C" {
