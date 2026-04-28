@@ -47,16 +47,18 @@ jobs:
         id: cache_gcpp
         uses: actions/cache@v4
         with:
-          path: "${{ env.PLUGIN_DIR }}\\godot-cpp"
-          key: godot-cpp-windows-4.3-stable-v2
+          path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
+          key: godot-cpp-windows-detected-v5
 
-      - name: Fetch godot-cpp (4.3-stable)
+      - name: Fetch godot-cpp
         if: steps.cache_gcpp.outputs.cache-hit != 'true'
         run: |
-          $dest = "$env:PLUGIN_DIR\godot-cpp"
+          $dest = Join-Path "${{ github.workspace }}" "$env:PLUGIN_DIR\godot-cpp"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          # Use the stable tag zip — reliable, no branch detection needed
-          $url = "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.3-stable.zip"
+          # Detect default branch to match Linux logic and get required 4.4+ headers
+          $branch = (git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD | Select-String 'ref: refs/heads/(.*)\s+HEAD').Matches[0].Groups[1].Value
+          if (-not $branch) { $branch = "master" }
+          $url = "https://github.com/godotengine/godot-cpp/archive/refs/heads/$branch.zip"
           Invoke-WebRequest $url -OutFile godot-cpp.zip -UseBasicParsing
           Expand-Archive godot-cpp.zip -DestinationPath _gcpp_tmp
           $inner = Get-ChildItem _gcpp_tmp | Select-Object -First 1
@@ -69,7 +71,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor\install-windows
-          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v2
+          key: vendor-windows-${{ hashFiles('vendor/CMakeLists.txt', 'vendor/quickjs/quickjs.h') }}-v4
 
       - name: Verify vendored deps (Windows)
         id: verify_vendor
@@ -77,7 +79,7 @@ jobs:
           $required = @(
             "$env:VENDOR_INSTALL\include\quickjs\quickjs.h",
             "$env:VENDOR_INSTALL\lib\quickjs.lib",
-            "$env:VENDOR_INSTALL\lib\lua5.4.lib",
+            "$env:VENDOR_INSTALL\lib\lua54.lib",
             "$env:VENDOR_INSTALL\lib\wren.lib",
             "$env:VENDOR_INSTALL\lib\squirrel.lib",
             "$env:VENDOR_INSTALL\lib\angelscript.lib"
@@ -96,15 +98,227 @@ jobs:
           }
 
       - name: Build vendored deps (Windows)
-        if: steps.cache_vendor.outputs.cache-hit != 'true' || steps.verify_vendor.outputs.vendor_ready != 'true'
+        # Always run vendored deps build to ensure required libraries
+        # are present for the plugin build. This avoids cache races
+        # where cache claims to be valid but artifacts are missing.
         run: |
+          # Create shims for missing POSIX headers required by QuickJS on Windows/MSVC
+          New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
+
+          @"
+          #ifndef MSVC_UTIME_H
+          #define MSVC_UTIME_H
+          #include <sys/utime.h>
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/utime.h"
+
+          @"
+          #ifndef MSVC_DIRENT_H
+          #define MSVC_DIRENT_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <windows.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          typedef struct dirent {
+              char d_name[MAX_PATH];
+          } dirent;
+          typedef struct DIR {
+              HANDLE hFind;
+              WIN32_FIND_DATAA fd;
+              dirent ent;
+              int first;
+          } DIR;
+          static inline DIR* opendir(const char* name) {
+              DIR* dir = (DIR*)malloc(sizeof(DIR));
+              char path[MAX_PATH];
+              snprintf(path, MAX_PATH, "%s\\*", name);
+              dir->hFind = FindFirstFileA(path, &dir->fd);
+              if (dir->hFind == INVALID_HANDLE_VALUE) { free(dir); return NULL; }
+              dir->first = 1;
+              return dir;
+          }
+          static inline struct dirent* readdir(DIR* dir) {
+              if (dir->first) { dir->first = 0; }
+              else if (!FindNextFileA(dir->hFind, &dir->fd)) return NULL;
+              strncpy(dir->ent.d_name, dir->fd.cFileName, MAX_PATH);
+              return &dir->ent;
+          }
+          static inline void closedir(DIR* dir) {
+              if (dir->hFind != INVALID_HANDLE_VALUE) FindClose(dir->hFind);
+              free(dir);
+          }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/dirent.h"
+
+          @"
+          #ifndef MSVC_SYS_WAIT_H
+          #define MSVC_SYS_WAIT_H
+          #define WIFEXITED(s) (1)
+          #define WEXITSTATUS(s) (s)
+          #define WIFSIGNALED(s) (0)
+          #define WTERMSIG(s) (0)
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/wait.h"
+          @"
+          #ifndef MSVC_UNISTD_H
+          #define MSVC_UNISTD_H
+          #include <io.h>
+          #include <stdint.h>
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <process.h>
+          #include <direct.h>
+          #include <windows.h>
+          #define STDIN_FILENO 0
+          #define STDOUT_FILENO 1
+          #define STDERR_FILENO 2
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
+          #endif
+          static inline void usleep(unsigned int us) { Sleep(us / 1000); }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/unistd.h"
+
+          @"
+          #ifndef MSVC_POSIX_FIXUP_H
+          #define MSVC_POSIX_FIXUP_H
+          #include <stdio.h>
+          #include <sys/stat.h>
+          #include <stdint.h>
+
+          #define popen _popen
+          #define pclose _pclose
+
+          #ifndef S_IFMT
+          #define S_IFMT  0170000
+          #endif
+          #ifndef S_IFLNK
+          #define S_IFLNK 0120000
+          #endif
+          #ifndef S_IFIFO
+          #define S_IFIFO 0010000
+          #endif
+          #ifndef S_IFBLK
+          #define S_IFBLK 0060000
+          #endif
+          #ifndef S_IFSOCK
+          #define S_IFSOCK 0140000
+          #endif
+          #ifndef S_IFREG
+          #define S_IFREG 0100000
+          #endif
+          #ifndef S_IFDIR
+          #define S_IFDIR 0040000
+          #endif
+
+          #ifndef S_ISDIR
+          #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+          #endif
+          #ifndef S_ISREG
+          #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+          #endif
+          #ifndef S_ISLNK
+          #define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
+          #endif
+          #ifndef S_ISSOCK
+          #define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
+          #endif
+          #ifndef S_ISFIFO
+          #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
+          #endif
+          #ifndef S_ISBLK
+          #define S_ISBLK(m) (((m) & S_IFMT) == S_IFBLK)
+          #endif
+
+          #if defined(_WIN64)
+          typedef int64_t ssize_t;
+          #else
+          typedef int32_t ssize_t;
+          #endif
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/msvc_posix_fixup.h"
+
+          @"
+          #ifndef MSVC_SYS_TIME_H
+          #define MSVC_SYS_TIME_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <winsock2.h>
+          #include <windows.h>
+          #include <time.h>
+          // winsock2.h defines struct timeval, so we don't define it here.
+          static inline int gettimeofday(struct timeval *tp, void *tzp) {
+              if (tp) {
+                  FILETIME ft; unsigned __int64 t;
+                  GetSystemTimeAsFileTime(&ft);
+                  t = ((unsigned __int64)ft.dwHighDateTime << 32) | (unsigned __int64)ft.dwLowDateTime;
+                  t -= 116444736000000000LL;
+                  tp->tv_sec = (long)(t / 10000000ULL);
+                  tp->tv_usec = (long)((t % 10000000ULL) / 10ULL);
+              }
+              return 0;
+          }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/sys/time.h"
+
+          @"
+          #ifndef MSVC_PTHREAD_H
+          #define MSVC_PTHREAD_H
+          #ifndef WIN32_LEAN_AND_MEAN
+          #define WIN32_LEAN_AND_MEAN
+          #endif
+          #include <windows.h>
+          #include <time.h>
+          // corecrt_wtime.h defines struct timespec, we skip redefining it.
+          typedef void* pthread_t;
+          typedef void* pthread_mutex_t;
+          typedef void* pthread_cond_t;
+          typedef void* pthread_attr_t;
+          typedef void* pthread_mutexattr_t;
+          typedef void* pthread_condattr_t;
+          #define PTHREAD_MUTEX_INITIALIZER {0}
+          #define PTHREAD_CREATE_DETACHED 1
+          #define CLOCK_REALTIME 0
+          static inline int clock_gettime(int clk_id, struct timespec *tp) { return 0; }
+          static inline int pthread_mutex_init(pthread_mutex_t* m, void* a) { return 0; }
+          static inline int pthread_mutex_destroy(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_mutex_lock(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_mutex_unlock(pthread_mutex_t* m) { return 0; }
+          static inline int pthread_cond_init(pthread_cond_t* c, void* a) { return 0; }
+          static inline int pthread_cond_destroy(pthread_cond_t* c) { return 0; }
+          static inline int pthread_cond_signal(pthread_cond_t* c) { return 0; }
+          static inline int pthread_cond_broadcast(pthread_cond_t* c) { return 0; }
+          static inline int pthread_cond_wait(pthread_cond_t* c, pthread_mutex_t* m) { return 0; }
+          static inline int pthread_cond_timedwait(pthread_cond_t* c, pthread_mutex_t* m, const struct timespec* t) { return 0; }
+          static inline int pthread_create(pthread_t* t, void* a, void* (*f)(void*), void* p) { return 0; }
+          static inline int pthread_join(pthread_t t, void** r) { return 0; }
+          static inline int pthread_attr_init(pthread_attr_t* a) { return 0; }
+          static inline int pthread_attr_setdetachstate(pthread_attr_t* a, int s) { return 0; }
+          static inline int pthread_attr_destroy(pthread_attr_t* a) { return 0; }
+          #endif
+          "@ | Set-Content -Path "vendor/msvc_shim/pthread.h"
+
+          Set-Content -Path "vendor/msvc_shim/sched.h" -Value ""
+
+          $v = (Resolve-Path vendor).Path.Replace('\', '/')
+          $shim = (Get-Item vendor/msvc_shim).FullName.Replace('\','/')
           cmake `
             -S vendor `
             -B vendor\build-windows `
             -G "Visual Studio 17 2022" `
+            -T ClangCL `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL"
+            -DCMAKE_INSTALL_PREFIX="$env:VENDOR_INSTALL" `
+            -DCMAKE_PROJECT_INCLUDE="$v/CMakeLists.windows.cmake" `
+            -DCMAKE_C_FLAGS="-I$shim -D_CRT_SECURE_NO_WARNINGS -DCONFIG_WIN32 -Dalloca=_alloca /FI malloc.h /FI $shim/msvc_posix_fixup.h" `
+            -DCMAKE_CXX_FLAGS="-D_CRT_SECURE_NO_WARNINGS"
           cmake --build vendor\build-windows --config Release --parallel
           cmake --install vendor\build-windows --config Release
 
@@ -173,38 +387,49 @@ jobs:
 
       - name: Verify or clean build cache
         run: |
-          $genHeaders = "$env:PLUGIN_DIR\$env:BUILD_DIR\godot-cpp\gen\include"
-          if (-not (Test-Path $genHeaders)) {
-            Write-Host "Generated godot-cpp headers missing — clearing cmake cache to force full reconfigure"
-            $buildDir = "$env:PLUGIN_DIR\$env:BUILD_DIR"
-            if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
-          } else {
-            Write-Host "Generated headers present: $genHeaders"
+          # Always clean build directory if we've changed the toolset or critical flags
+          # to ensure the compiler is re-identified correctly.
+          $buildDir = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          if (Test-Path $buildDir) { 
+            Write-Host "Cleaning build directory $buildDir to force re-identification of compiler"
+            Remove-Item $buildDir -Recurse -Force 
           }
+          New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 
       - name: Configure (Windows x64)
         run: |
-          $s = "$env:PLUGIN_DIR"
-          $b = "$env:PLUGIN_DIR\$env:BUILD_DIR"
+          $s = (Resolve-Path "$env:PLUGIN_DIR").Path.Replace('\', '/')
+          $b = (Join-Path $s "$env:BUILD_DIR").Replace('\', '/')
+          $vendor = $env:VENDOR_INSTALL.Replace('\', '/')
+          
+          $gcpp_inc = "$s/godot-cpp/include"
+          $gcpp_gen = "$b/godot-cpp/gen/include"
+          $lua_inc = "$vendor/include/lua5.4"
+          $lua_lib = "$vendor/lib/lua5.4.lib"
+          
           New-Item -ItemType Directory -Force -Path $b | Out-Null
           cmake `
-            -S $s `
-            -B $b `
+            -S "$s" `
+            -B "$b" `
             -G "Visual Studio 17 2022" `
+            -T ClangCL `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH="$env:VENDOR_INSTALL" `
-            -DGODOT_CPP_GEN_INCLUDE="$b/godot-cpp/gen/include" `
-            -DLUA_INCLUDE_DIR="$env:VENDOR_INSTALL/include/lua5.4" `
-            -DLUA_LIBRARIES="$env:VENDOR_INSTALL/lib/lua5.4.lib" `
-            -DQUICKJS_INCLUDE="$env:VENDOR_INSTALL/include" `
-            -DQUICKJS_LIB="$env:VENDOR_INSTALL/lib/quickjs.lib" `
-            -DWREN_INC="$env:VENDOR_INSTALL/include" `
-            -DWREN_LIB="$env:VENDOR_INSTALL/lib/wren.lib" `
-            -DSQUIRREL_INC="$env:VENDOR_INSTALL/include" `
-            -DSQUIRREL_LIB="$env:VENDOR_INSTALL/lib/squirrel.lib" `
-            -DAS_INC="$env:VENDOR_INSTALL/include" `
-            -DAS_LIB="$env:VENDOR_INSTALL/lib/angelscript.lib" `
+            -DCMAKE_PREFIX_PATH="$vendor" `
+            -DCMAKE_PROJECT_INCLUDE="$s/CMakeLists.windows.cmake" `
+            -DGODOT_CPP_INCLUDE="$gcpp_inc" `
+            -DGODOT_CPP_GEN_INCLUDE="$gcpp_gen" `
+            -DLUA_INCLUDE_DIR="$lua_inc" `
+            -DLUA_LIBRARIES="$lua_lib" `
+            -DQUICKJS_INCLUDE="$vendor/include" `
+            -DQUICKJS_LIB="$vendor/lib/quickjs.lib" `
+            -DWREN_INC="$vendor/include" `
+            -DWREN_LIB="$vendor/lib/wren.lib" `
+            -DSQUIRREL_INC="$vendor/include" `
+            -DSQUIRREL_LIB="$vendor/lib/squirrel.lib" `
+            -DAS_INC="$vendor/include" `
+            -DAS_LIB="$vendor/lib/angelscript.lib" `
+            -DAS_ADDONS_LIB="$vendor/lib" `
             -DPL_ENABLE_HARDENING=OFF `
             -DPOLYLANG_BUILD_TESTS=OFF `
             -DPOLYLANG_BUILD_ODIN_TESTS=OFF
