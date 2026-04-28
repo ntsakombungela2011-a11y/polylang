@@ -1,846 +1,0 @@
-﻿POLYLANG GDEXTENSION
-Master Combined Document
-
-Full Rebuild Prompt  +  Full Rebuild Reference
-Godot 4.6  •  C++20  •  17 Adapters  •  v6.8  •  ABI v6
-45 Prompt Sections  •  10 Zero-Trust Audit Rounds  •  33 Vulnerabilities Fixed
-
-HOW TO USE THIS DOCUMENT
-PART 1 - The PromptFeed this to any AI along with Part 2. It defines the mission, security requirements, architecture, all 45 sections, and the 10 audit rounds. The AI must read this first.PART 2 - The ReferenceThe ground truth of the actual implementation. Every file, every fix, every pitfall that caused a real CI failure. The AI treats this as the implementation spec and never deviates without flagging it.Combined UsageGive the AI both parts together. Part 1 is the law. Part 2 is the blueprint. Where they conflict, Part 2 wins on implementation details. Part 1 wins on architecture, security, and quality.
-
-
-
-PART 1
-THE FULL REBUILD PROMPT
-Architecture • Security • Quality • Process - 45 Sections
-
-
-
-Section 1 - Identity & Context
-You are a senior C++20 systems architect, GDExtension specialist, and security engineer. You are rebuilding PolyLang from scratch - a Godot 4.x GDExtension plugin that allows multiple programming languages to be used as first-class script resources inside the Godot editor and runtime.
-The user is a solo developer working on Android (Termux, Acode) with GitHub Actions as the exclusive build and compilation environment. There is no local desktop compiler. Every build, test, and CI step must work entirely through GitHub Actions workflows.
-You have been given the PolyLang Master Reference Document which contains the full specification, all previous audit findings (VLN-series vulnerabilities, BUG-series runtime bugs), the adapter architecture, the language list, the vtable design, the C shim patterns, and all known failure modes from the previous codebase. Treat this document as ground truth.
-
-
-Section 2 - Mission
-Rebuild PolyLang from the ground up with the following non-negotiable targets:
-10/10 ReadabilityEvery human reading this code understands it without needing to ask questions10/10 ExpandabilityAdding a new language adapter requires touching the minimum possible files and zero guesswork10/10 ScalabilityThe architecture holds as adapters, languages, and Godot versions grow10/10 SecurityZero implicit trust anywhere in the codebase10/10 MaintainabilityA developer returning after 6 months can orient themselves in under 10 minutes10/10 Build ReliabilityGitHub Actions workflows never fail due to architecture decisions10/10 PerformanceNo unnecessary allocations, no redundant dispatches, no blocking hot paths10/10 TestabilityEvery adapter, every vtable method, every FFI boundary has a test10/10 DocumentationEvery file, class, function, and macro has a clear purpose comment10/10 CorrectnessCompiles cleanly, links cleanly, runs without undefined behaviour
-
-Section 3 - Threat Model
-Before writing a single line of security code, commit docs/THREAT_MODEL.md. Every security decision must trace back to a threat in this document.
-Threat Actors
-Malicious Script Author
-Scripts designed to escape the sandbox, access the filesystem, crash the engine, consume unbounded resources, or exfiltrate data.
-Malicious Plugin Consumer
-A Godot project that loads PolyLang and abuses its API to run code outside the intended script execution path.
-Malicious Vendored Dependency
-Supply-chain tampering of pinned third-party code between pin time and use.
-Compromised GitHub Actions Runner
-Build environment tampering producing binaries that do not match the source.
-Malicious Hot-Reload File
-A file swapped on a watched path to inject code through the reload path.
-Trust Boundaries
-UNTRUSTEDAll script source code regardless of originUNTRUSTEDAll file paths received from the Godot editorUNTRUSTEDAll return values from foreign language runtimesUNTRUSTEDAll data crossing any FFI boundary in either directionPARTIALLY TRUSTEDGodot engine API calls (correctness only, not input validation)FULLY TRUSTEDOnly PolyLang core C++ code itself, after passing all 10 audit roundsEvery trust boundary crossing must be marked: // TRUST BOUNDARY: <what is validated and why>
-
-
-Section 4 - Zero Trust Security Audit Protocol
-After completing the full rebuild, run exactly 10 sequential zero-trust security audit rounds before delivering any code. Each round is independent. Do not skip rounds. Do not combine rounds. Each round must produce a written audit report before proceeding to the next.
-Round 1 - FFI Boundary Audit
-Finding prefix: VLN-R1-XXX
-Inspect every FFI crossing. Check for: unchecked null returns, unvalidated string lengths, missing error codes, type mismatches across the ABI boundary, and any assumption that the foreign runtime is in a valid state.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 2 - Memory Safety Audit
-Finding prefix: VLN-R2-XXX
-Check for: use-after-free, double-free, heap buffer overflows, stack overflows in recursive dispatch, uninitialized memory reads, dangling pointers after hot-reload teardown, and any raw new/delete replaceable with RAII.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 3 - Hot-Reload Security Audit
-Finding prefix: VLN-R3-XXX
-Treat hot-reload as a completely untrusted code injection vector. Check for: missing file signature verification, no sandboxing of reloaded code, implicit trust of file paths, race conditions between teardown and reinit, leaked handles after failed reload, path traversal.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 4 - Input Validation Audit
-Finding prefix: VLN-R4-XXX
-Every string, path, identifier, and config value from outside must be validated before use. Check for: unvalidated script source strings, unvalidated file paths, missing UTF-8 validation, external input reaching FFI without sanitisation.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 5 - Vtable Integrity Audit
-Finding prefix: VLN-R5-XXX
-Check for: function pointers never validated before call, vtable slots overwritable after initialisation, missing null checks on all vtable entries, partial vtable initialisation treated as valid, vtable use after owning adapter is destroyed.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 6 - Concurrency & Thread Safety Audit
-Finding prefix: VLN-R6-XXX
-Check every shared resource for thread safety. Check for: unprotected global state, non-thread-safe adapters called from worker threads, missing locks on the language registry, hot-reload on a different thread from dispatch, non-atomic operations on shared counters.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 7 - Dependency & Supply Chain Audit
-Finding prefix: VLN-R7-XXX
-Check for: unpinned dependency versions, any dependency fetched over HTTP, any GitHub Action not pinned to a commit SHA, missing checksum verification on downloaded archives, dependencies with known CVEs.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 8 - Godot API Boundary Audit
-Finding prefix: VLN-R8-XXX
-Check for: missing return value checks on ClassDB registration, incorrect variant type assumptions, unvalidated object pointers from Godot, missing null checks on engine singletons, calls assuming a Godot object is alive without checking.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 9 - Error Handling & Fault Tolerance Audit
-Finding prefix: VLN-R9-XXX
-Check for: silent error swallowing, missing error propagation to GDScript, crashes instead of graceful degradation, adapters leaving the system in a corrupted state, assert used in production code paths.
-NOTE: Fix ALL violations before proceeding to the next round.
-Round 10 - Final Holistic Audit
-Finding prefix: VLN-R10-XXX
-Read the entire codebase as a fresh set of eyes. Check for: anything missed in rounds 1-9, architectural inconsistencies introduced during fixing, documentation no longer matching code, any TODO left in production code.
-NOTE: Fix ALL violations before proceeding to the next round.
-
-
-Section 5 - Architecture Requirements
-Language Adapter System
-• Every adapter must implement a C++20 concept called PolyLangAdapter enforcing the full interface at compile time. Missing methods = build failure with a clear error.
-• Adapter interface must include: initialise(), shutdown(), execute(source, context), hot_reload(path), validate_source(source), get_language_id(), get_supported_extensions(), get_error_state(), reset_error_state().
-• Every adapter must be completely self-contained in src/adapters/<language_name>/ with no cross-adapter dependencies.
-• Adapters requiring a C shim must include the shim inside their own directory.
-Language Registry
-• Single source of truth: src/registry/language_registry.cpp
-• Adding a new language requires editing exactly one file (the registry) and creating one new adapter directory. Nothing else.
-• Registry must validate at startup that every adapter has a unique language ID. Duplicate IDs = hard startup failure.
-String & Memory Management
-• All string conversions must go through src/core/string_bridge.hpp. No adapter may perform its own string conversion.
-• All memory crossing an FFI boundary must be owned and freed by the side that allocated it, documented in every FFI function signature.
-• No raw new/delete anywhere. Use std::unique_ptr, std::shared_ptr, or arena allocators.
-Hot Reload
-• Hot reload must be a separate, isolated subsystem in src/core/hot_reload/.
-• Every reload must validate the file path against an allowlist before touching the filesystem.
-• Teardown and reinit must be atomic from Godot's perspective.
-Error Handling
-• Every function that can fail must return a PolyLangResult<T> type (std::expected-style wrapper).
-• Errors must always propagate back to GDScript as a Dictionary with keys: success, error_code, error_message, adapter.
-• No error may be silently swallowed anywhere.
-Directory Structure
-polylang/
-├── .github/workflows/  (build.yml, test.yml, audit.yml)
-├── src/
-│   ├── core/           (adapter_concept.hpp, constants.hpp, error_types.hpp,
-│   │                    polylang_result.hpp, string_bridge.hpp, logger.hpp)
-│   ├── core/hot_reload/ (hot_reload_manager.hpp/cpp)
-│   ├── registry/        (language_registry.hpp/cpp)
-│   ├── adapters/<lang>/ (<lang>_adapter.hpp/cpp, shim/ if needed)
-│   └── godot_entry.cpp  ← entry point ONLY, zero business logic
-├── tests/
-├── vendor/              (all vendored deps, pinned)
-├── CMakeLists.txt
-└── CMakePresets.json
-
-
-Section 6 - Script Compilation Cache
-• Cache keys: SHA-256 of script source + language ID + PolyLang version string.
-• Location: user://polylang_cache/  |  TTL: polylang/cache/ttl_seconds (default 3600)
-• Max size: polylang/cache/max_size_mb (default 256)  |  Eviction: LRU
-• Disabled in debug builds by default. Cache corruption detected via checksums - silently discarded and recompiled, never a crash.
-
-
-Section 7 - Debugging Support
-• Every adapter implements get_stack_trace() returning Array of Dictionary with keys: file, line, function, language.
-• Stack traces appear in Godot debugger panel formatted identically to GDScript stack traces.
-• Every adapter implements get_current_line() for step debugging line highlighting.
-• Breakpoint support: adapters declare POLYLANG_SUPPORTS_BREAKPOINTS. Supporting adapters implement set_breakpoint(file, line) and clear_breakpoint(file, line).
-• Post-mortem dumps written to user://polylang_crashes/ on any fatal error.
-
-
-Section 8 - Profiling & Performance Monitoring
-• Every script execution wrapped in Godot profiler markers: PolyLang/<language>/<script_name>
-• Profiler markers are zero-cost when profiler is not active.
-• PolyLangProfiler singleton exposes: get_total_execution_time(language_id), get_call_count(language_id), get_slowest_script(), reset_stats()
-• Per-frame budget monitoring: polylang/profiling/frame_budget_warning_percent (default 20)
-
-
-Section 9 - Inter-Adapter Communication
-• PolyLangBridge class registered with ClassDB exposing call_script(language_id, script_path, method_name, args).
-• Cross-adapter calls go through the full validation pipeline - they are not trusted shortcuts.
-• Type marshalling for cross-adapter calls goes through Godot's Variant system.
-• Circular cross-adapter calls (A→B→A) detected and terminated with a clear error.
-• Call depth capped: polylang/security/max_cross_adapter_depth (default 16)
-
-
-Section 10 - Type System & Variant Mapping
-A TypeMapper utility in src/core/type_mapper.hpp provides canonical mapping rules. Every adapter uses this - no adapter implements its own type mapping.
-boolNative boolean - bidirectionalintNative 64-bit integer - bidirectionalfloatNative 64-bit float - bidirectionalStringNative string via string_bridge - all adaptersVector2/3/4Native struct or tuple - bidirectionalColorNative struct or tuple - bidirectionalArrayNative array/list - bidirectionalDictionaryNative map/dict - bidirectionalObjectOpaque handle + method call bridgeCallableNative function referenceSignalNative signal handlenilNative null
-
-Section 11 - Configuration & Project Settings
-All PolyLang configuration accessible through Godot's project settings under polylang/. Registered in src/core/polylang_settings.hpp.
-polylang/security/max_execution_ms5000  - script execution timeoutpolylang/security/max_cross_adapter_depth16    - max cross-adapter call depthpolylang/security/allow_filesystem_accessfalse - script filesystem permissionpolylang/security/allow_network_accessfalse - script network permission (HARD DEFAULT)polylang/cache/enabledtrue  - compilation cache togglepolylang/cache/max_size_mb256   - max cache disk usagepolylang/hot_reload/enabledtrue  - editor hot-reload togglepolylang/hot_reload/debounce_ms500   - hot-reload debounce windowpolylang/profiling/enabledfalse - profiler togglepolylang/debug/dump_crashestrue  - write crash post-mortems
-
-Section 12 - Script Inheritance & Composition
-• A PolyLang script must be attachable to any Godot Node or Resource as a script.
-• Cross-language inheritance supported where adapter declares POLYLANG_SUPPORTS_GDSCRIPT_INHERITANCE.
-• GDScript must be able to extend a PolyLang script.
-• class_name equivalent supported in every adapter supporting static typing.
-
-
-Section 13 - Async & Coroutine Support
-• Every adapter declares POLYLANG_SUPPORTS_COROUTINES.
-• Coroutines map to Godot's Signal await pattern.
-• Coroutine execution respects the sandbox time limit - exceeded coroutines terminated cleanly.
-• Orphaned coroutines whose owning node was freed must be detected and cleaned up.
-
-
-Section 14 - Network Sandboxing
-• polylang/security/allow_network_access defaults to false - hard default, cannot be overridden by script code.
-• When false, any attempt by a foreign runtime to open a socket returns a permission denied error.
-• When true, all network calls logged at INFO level via POLYLANG_AUDIT_LOG macro.
-• HTTP/HTTPS is the only permitted protocol when network access is enabled.
-
-
-Section 15 - CMake Configuration
-cmake_minimum_required(VERSION 3.28)
-project(polylang VERSION <semver> LANGUAGES CXX C)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  # required for clang-tidy
-
-• All compiler warnings must be errors in CI: -Wall -Wextra -Wpedantic -Werror
-• ASAN/UBSAN available as CMake options: -DPOLYLANG_ASAN=ON, -DPOLYLANG_UBSAN=ON
-• CMakePresets.json committed with presets: debug, release, ci, asan, ubsan
-• Position-independent code (-fPIC) set globally.
-• LTO enabled for release builds.
-• Output directory: bin/ containing .gdextension and all platform libraries.
-
-
-Section 16 - .gdextension File Specification
-Auto-generated by CMake at configure time using a .in template - never hand-edited. Entry symbol polylang_library_init is permanently frozen.
-[configuration]
-entry_symbol = "polylang_library_init"
-compatibility_minimum = "4.2"
-reloadable = true
-
-[libraries]
-linux.debug.x86_64     = "res://addons/polylang/bin/libpolylang.linux.debug.x86_64.so"
-linux.release.x86_64   = "res://addons/polylang/bin/libpolylang.linux.release.x86_64.so"
-windows.debug.x86_64   = "res://addons/polylang/bin/libpolylang.windows.debug.x86_64.dll"
-windows.release.x86_64 = "res://addons/polylang/bin/libpolylang.windows.release.x86_64.dll"
-macos.debug            = "res://addons/polylang/bin/libpolylang.macos.debug.framework"
-macos.release          = "res://addons/polylang/bin/libpolylang.macos.release.framework"
-
-
-Section 17 - Versioning
-• Semantic Versioning 2.0.0. Version defined in exactly one place: CMakeLists.txt.
-• MAJOR: adapter API breaks backward compatibility.  MINOR: new language adapter added.  PATCH: bug fixes, security patches, audit fixes.
-• Every GitHub Actions release build tags the commit with v<MAJOR>.<MINOR>.<PATCH>.
-• CHANGELOG.md maintained following keepachangelog.com conventions.
-
-
-Section 18 - Logging & Diagnostics System
-• Log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL
-• Debug builds: all levels active. Release builds: only WARN/ERROR/FATAL compiled in - others compiled out for zero runtime cost.
-• Every log message includes: timestamp, log level, file name, line number, adapter name, message.
-• Logs route to Godot's print/push_error system.
-• POLYLANG_AUDIT_LOG macro always compiles in (even release) - writes to a separate audit log buffer accessible from GDScript.
-• No std::cout or printf anywhere. All output goes through the logger.
-
-
-Section 19 - Testing Strategy
-Unit Tests
-• Every adapter: tests/<language>/test_<language>_adapter.cpp
-• Coverage: lifecycle, valid/invalid execution, hot_reload, validate_source with malicious input, error state reset.
-Integration Tests
-• Minimal Godot project at tests/integration/godot_project/
-• GitHub Actions runs headless Godot (godot --headless) to execute integration test scenes.
-Fuzz Tests
-• Every validate_source() implementation must have a libFuzzer fuzz test.
-• Fuzz tests run weekly via fuzz.yml workflow.
-Performance Benchmarks
-• Benchmark suite at tests/benchmarks/ measuring: adapter init time, script execute latency (cold/warm), hot-reload round-trip, string bridge throughput.
-• A regression of more than 10% on any benchmark fails the CI build.
-
-
-Section 20 - Script Resource System
-• Each language registers a custom ScriptLanguage implementation with Godot's ScriptServer.
-• Scripts loadable via load("res://my_script.lua") or appropriate extension.
-• Scripts support: attaching to nodes, exporting properties to inspector, emitting and connecting signals, calling into GDScript and back.
-• Script compile/parse errors appear in the Godot editor error panel with file name and line number.
-
-
-Section 21 - Property & Signal Exposure System
-• Every adapter implements get_exported_properties() returning a typed list of PropertyInfo structs.
-• Every adapter implements get_exported_signals() returning signal names and argument types.
-• PropertyBridge utility in src/core/property_bridge.hpp provides helper functions for common type mappings.
-• Mismatched property types produce a clear error at load time, not a crash at runtime.
-
-
-Section 22 - Sandboxing & Execution Safety
-• Maximum execution time per script call: polylang/security/max_execution_ms (default 5000ms). Scripts exceeding time limit terminated cleanly - never hang the engine.
-• Scripts have no filesystem access unless adapter declares POLYLANG_ADAPTER_REQUIRES_FS_ACCESS and user enables it.
-• Every adapter declaration file must have an explicit capabilities block listing exactly what system access it requires.
-
-
-Section 23 - Editor Plugin
-• Companion GDScript editor plugin at addons/polylang/plugin.gd
-• PolyLang Status Panel in editor bottom dock: loaded adapters, versions, error states, reload button per adapter.
-• Syntax highlighting for each registered language via Godot's CodeHighlighter.
-• Warning shown in editor if any adapter failed to initialise at startup.
-• Run Script button executes the currently open PolyLang script against a dummy context.
-• plugin.cfg version matches the main extension version exactly.
-
-
-Section 24 - Extension Initialisation Order
-The GDExtension entry point must follow this strict order. Deviation causes subtle runtime failures.
-1. Initialise the logging subsystem (first - everything else depends on it)
-2. Load and validate project settings
-3. Initialise the string bridge
-4. Initialise the type mapper
-5. Initialise the compilation cache
-6. Initialise the hot-reload manager (editor builds only)
-7. Initialise the profiler (if enabled)
-8. Validate all vendored dependency integrity checksums
-9. Register all adapters with the language registry
-10. Validate the adapter registry (check for duplicates, missing methods)
-11. Initialise each adapter (failures logged + adapter disabled - do not abort whole init)
-12. Register all Godot ClassDB classes
-13. Register all project settings
-14. Register the editor plugin (editor builds only)
-15. Log successful initialisation with version string and active adapter list
-NOTE: Shutdown must happen in exactly reverse order.
-
-
-Section 25 - Crash Reporting & Recovery
-• Every call into a foreign language runtime wrapped in a structured exception/signal handler.
-• Linux/macOS: SIGSEGV and SIGABRT from a foreign runtime caught, adapter marked failed, control returned to Godot - not a full engine crash.
-• Windows: Structured Exception Handling (SEH) wraps all foreign runtime calls.
-• Post-mortem dumps written to user://polylang_crashes/ containing: timestamp, adapter name, script path, last known line, full stack trace, system info.
-• error_recovered signal emitted on PolyLang singleton whenever a crash is caught and contained.
-
-
-Section 26 - Backward Compatibility Policy
-• GDScript-facing API stable from v1.0.0 onwards - no breaking changes without a MAJOR version bump.
-• C++ adapter interface stable from v1.0.0 onwards - adding required methods requires a MAJOR version bump.
-• Entry symbol polylang_library_init is permanently stable.
-• Deprecations: deprecated in version N, removed in version N+2. Deprecated methods log a WARN on every call.
-
-
-Section 27 - Git Workflow & Branching Strategy
-mainAlways release-ready. Direct pushes forbidden. Every commit is a version tag.devIntegration branch. All feature branches merge here first. CI must pass before merge.feature/<n>Individual features or adapters. One adapter per branch.fix/<id>One branch per VLN or BUG fix. Never bundle multiple fixes.audit/<round>Dedicated branch for each audit round's fixes.Conventional Commits
-feat(adapter/lua): add coroutine support
-fix(vln-r2-001): patch use-after-free in hot-reload teardown
-chore(vendor): pin godot-cpp to commit abc1234
-
-
-Section 28 - Pull Request & Code Review
-A PULL_REQUEST_TEMPLATE.md must be committed to .github/ containing the following mandatory checklist:
-• What does this PR do? Which adapters are affected? VLN/BUG references (if applicable)?
-• clang-tidy run locally, unit tests added/updated, Master Reference Document updated, CHANGELOG.md updated.
-• Zero new compiler warnings, MANIFEST.md updated if dependency changed, all 17 adapters still compile.
-• Platform testing confirmed: Linux, Windows, macOS.
-
-
-Section 29 - Issue Tracking Templates
-bug_report.md
-• Captures: Godot version, PolyLang version, affected adapter, reproduction steps, expected/actual behaviour, stack trace, regression status.
-security_finding.md
-• Captures: affected component, severity, attack vector, reproduction steps, proposed fix. Filed as private issues initially.
-adapter_request.md
-• Captures: language name, FFI interface type, use case justification, compiler availability in GitHub Actions, license compatibility.
-
-
-Section 30 - License Compliance
-LuaMIT - permissivePythonPSF - permissiveQuickJSMIT - permissiveMono/C#MIT - permissiveRubyBSD-2 - permissivePHPPHP License - REVIEW REQUIRED before shippingWrenMIT - permissive
-
-Section 31 - Dependency Update Policy
-• Scheduled dependency_check.yml workflow runs weekly and checks every pinned dependency against upstream.
-• Security updates (CVE fixes) must be applied within 7 days of discovery - hard deadline.
-• Non-security updates follow a monthly update cycle.
-• godot-cpp updates are tied to the target Godot version - never updated independently.
-• Dependency updates and feature changes must never be in the same PR.
-
-
-Section 32 - Godot Signals Deep Integration
-• Signals defined in a PolyLang script must be emittable from that script and connectable from GDScript, C#, and other PolyLang scripts.
-• Every adapter implements emit_signal(signal_name, args) and connect_signal(signal_name, callable) through the PropertyBridge.
-• Signals must survive hot-reload - connections made before a reload must be automatically reconnected after successful reload.
-• Stress test: 1000 rapid signal emissions must produce no memory leaks or performance degradation.
-
-
-Section 33 - GDExtension Entry Symbol Specification
-The entry point in godot_entry.cpp must contain NO business logic whatsoever. All initialisation logic lives in PolylangRuntime::initialise().
-extern "C" {
-GDExtensionBool GDE_EXPORT polylang_library_init(
-    GDExtensionInterfaceGetProcAddress p_get_proc_address,
-    GDExtensionClassLibraryPtr p_library,
-    GDExtensionInitialization* r_initialization)
-{
-    // Bind the GDExtension interface
-    // Set initialisation callbacks
-    // Nothing else
-}
-} // extern "C"
-WARNING: The entry symbol polylang_library_init is permanently frozen. It must never be renamed. It must match the .gdextension file exactly.
-
-
-Section 34 - Vendored Dependencies
-Required Core Vendors
-• godot-cpp: exact commit SHA pinned (never a branch), stored in vendor/godot-cpp/
-• Every adapter requiring foreign headers vendors those headers into vendor/<language>/include/
-• Testing framework (doctest or Catch2) vendored into vendor/testing/ at exact version.
-Vendoring Rules
-• Every entry in vendor/ must have a corresponding entry in vendor/MANIFEST.md with: name, version, source URL, commit SHA, license type, reason for inclusion.
-• No dependency may be updated without updating MANIFEST.md in the same commit.
-• Any dependency with a known CVE must be updated or removed - it may not be carried forward.
-FetchContent Rules
-FetchContent_Declare(
-  <dep_name>
-  GIT_REPOSITORY https://github.com/<owner>/<repo>.git
-  GIT_TAG        <exact_commit_sha>  # NEVER a branch name
-  GIT_SHALLOW    TRUE
-)
-GitHub Actions Cache Strategy
-- uses: actions/cache@<pinned_sha>
-  with:
-    path: |
-      vendor/
-      build/_deps/
-      ~/.cache/ccache
-    key: ${{ runner.os }}-deps-${{ hashFiles('vendor/MANIFEST.md', 'CMakeLists.txt') }}
-
-
-Section 35 - Document Maintenance
-A PolyLang Master Reference Document (docs/PolyLang_Master_Reference.docx) must be created and updated automatically after every single change. This document is the living ground truth of the entire project.
-• Generated and updated programmatically via tools/update_docs.py - never hand-edited in isolation.
-• Script runs automatically as the final step of every GitHub Actions workflow.
-• If the document fails to update, the workflow must fail.
-• Updated document committed back to the repository automatically by CI docs-bot commit step.
-Mandatory Document Sections
-Section 1Project Overview - version, Godot target, platforms, architecture summarySection 2Architecture Decision Record - every major design decision ever madeSection 3Full Adapter Registry - all adapters with status and coverageSection 4All 17 Adapter Specifications - one dedicated subsection per adapterSection 5VLN Vulnerability Registry - every VLN finding with fix statusSection 6BUG Runtime Registry - every BUG-series runtime bugSection 7API Reference - auto-generated from source code doc commentsSection 8GitHub Actions Workflow ReferenceSection 9Vendored Dependency ManifestSection 10Benchmark History - running table of all benchmark runsSection 11Audit Round Reports - all audit reports appended chronologicallySection 12Migration & ChangelogSection 13Definition of Done Tracker - auto-populated from latest CI run
-
-Section 36 - All 17 Language Adapters
-WARNING: All 17 adapters must be fully implemented. No adapter may be stubbed, skipped, or marked as future work.
-
-#LanguageExtensionFFI TypeNotes1GDScript Compat.gdNativeRoutes GDScript through PolyLang for registry/error consistency2Lua.luaLua 5.4 C APICoroutines, metatables, full GDScript interop. C shim handles stack management.3Python.pyCPython C APIPython 3.11+. Isolated interpreter contexts per script. GIL handled transparently.4JavaScript/TS.js/.tsQuickJSES2020 support. TypeScript transpiled at load time.5C#.csMono EmbedTier-1 adapter. async/await mapped to Godot signal system.6Rust.rsextern C FFIScripts compiled to shared libraries. Hot-reload triggers recompile via rustc.7Go.goCGoC shim required. GC interaction with C memory handled carefully.8Odin.odinC Shim + VtableFull vtable, C shim, hot-reload from previous codebase with all audit findings fixed.9Haxe.hxHaxe C++ targetScripts transpiled at load time via HashLink or direct C++ transpilation.10Kotlin/JVM.ktJNIRequires JVM at runtime. Gracefully fails if no JVM found - never crashes.11Swift.swift@_cdecl exportsPrimarily for macOS. Other platforms return clear unsupported-platform error.12Zig.zigC ABIScripts compiled to shared libraries. Zig compiler pinned in CI.13Nim.nim{.exportc.}Nim compiler pinned in CI. GC boundary handled carefully.14D (DLang).dextern(C)DMD or LDC compiler pinned in CI. GC boundary handled carefully.15Ruby.rbRuby C APIRuby headers vendored. GVL handled equivalently to Python's GIL.16PHP.phpEmbed SAPIExtra caution in FFI audit. PHP License must be reviewed before shipping.17Wren.wrenWren C EmbedREFERENCE IMPLEMENTATION. Most thoroughly documented. Template for all others.
-
-Section 37 - Cross-Adapter Requirements
-Every adapter must declare the following regardless of language:
-POLYLANG_GC_NONENo garbage collectorPOLYLANG_GC_REFERENCE_COUNTEDReference counting GCPOLYLANG_GC_TRACINGTracing/mark-and-sweep GC - must implement gc_hint_collect()POLYLANG_GC_MANUALManual memory managementPOLYLANG_THREAD_UNSAFENot safe for concurrent callsPOLYLANG_THREAD_SERIALISEDSafe if serialisedPOLYLANG_THREAD_SAFEFully thread-safe
-
-Section 38 - Code Quality Requirements
-Comments & Documentation
-• Every file: file-level comment with purpose, author, date, list of public types/functions.
-• Every class: documentation comment explaining role and relationship to other components.
-• Every function >10 lines: comment explaining algorithm or non-obvious logic.
-• Every FFI boundary: comment explaining ownership, threading assumptions, error contract.
-• No magic numbers - all constants in src/core/constants.hpp
-Naming Conventions
-ClassesPascalCaseFunctions/methodssnake_caseMember variablesm_snake_caseConstantsUPPER_SNAKE_CASEFile namessnake_case.cpp / snake_case.hppAdapter directorieslowercase language name exactly
-
-Section 39 - GitHub Actions Build Requirements
-• All builds run exclusively on GitHub Actions. There is no local compiler.
-• Build matrix: ubuntu-latest (primary), windows-latest, macos-latest
-• Every dependency must be vendored or FetchContent with exact version tag or commit SHA. No floating main/latest references ever.
-• Build workflow steps: checkout → install dependencies → configure CMake → build → run tests → report results. No step may be skipped.
-• Separate audit.yml workflow runs clang-tidy and cppcheck on every pull request and blocks merge on any finding.
-• Workflow files must use pinned action versions (commit SHAs, not tag names).
-• Build times optimised using ccache and GitHub Actions cache.
-
-
-Section 40 - Release Process
-• release.yml workflow triggers on pushing a v* tag.
-• Release workflow: full build matrix → all tests → all 10 audit static analysis checks → package artifacts per platform → create GitHub Release → upload binaries.
-• Release artifacts named: polylang-v<VERSION>-<platform>-<arch>.zip
-• Each zip contains: .gdextension file, platform binary, addons/polylang/ directory, CHECKSUMS.sha256.
-• A release must never be created from a build with any failing test, failing audit, or pending VLN finding.
-
-
-Section 41 - Platform-Specific Requirements
-Linux
-• Build against the oldest supported glibc compatible with Godot's own binaries.
-Windows
-• MSVC toolchain. All string handling explicitly UTF-8 aware. DLL exports explicitly declared.
-macOS
-• Universal binary (arm64 + x86_64) using CMAKE_OSX_ARCHITECTURES.
-Android (Future Target)
-• Architecture must not preclude Android support. No POSIX-specific APIs without abstraction.
-
-
-Section 42 - Code Freeze & Release Readiness Checklist
-Human must manually verify all of the following before any release tag is pushed:
-Functional
-• Loaded extension in Godot editor manually - no errors
-• Ran at least one script per adapter in a real Godot project
-• Hot-reload tested manually for at least 3 adapters
-• Editor plugin status panel opens and shows all adapters
-Security
-• All 10 audit rounds show zero open findings
-• No TODO or FIXME in production code paths
-• MANIFEST.md matches vendor/ directory exactly
-Documentation
-• Master Reference Document version matches CMakeLists.txt
-• CHANGELOG.md has entry for this version
-Build
-• All three platform builds succeeded
-• All benchmark results within acceptable thresholds
-• .gdextension file tested in Godot - extension loads without errors
-
-
-Section 43 - Definition of Done
-The rebuild is not complete until every single one of the following is true:
-• [ ]  All 10 audit rounds completed with zero open findings
-• [ ]  All tests passing on all three platforms in GitHub Actions
-• [ ]  All benchmarks within acceptable thresholds
-• [ ]  Zero compiler warnings on all three platforms
-• [ ]  Zero clang-tidy findings
-• [ ]  Zero cppcheck findings
-• [ ]  MANIFEST.md accounts for every file in vendor/
-• [ ]  CHANGELOG.md, MIGRATION.md, README.md, COMPATIBILITY.md all complete
-• [ ]  Every adapter passes its fuzz test corpus without crashes
-• [ ]  The .gdextension file loads correctly in a headless Godot instance
-• [ ]  The editor plugin loads without errors in Godot 4.x
-• [ ]  Version in CMakeLists.txt, .gdextension, plugin.cfg, and CHANGELOG.md all match exactly
-• [ ]  All 17 adapters initialise successfully in CI
-• [ ]  Master Reference Document updated and committed by docs-bot
-• [ ]  Signal integration stress test passed (1000 rapid emissions, no leaks)
-• [ ]  Crash recovery tested - at least one adapter crash caught and contained without engine crash
-
-
-Section 44 - Deliverables
-Produce the following in order. Do not deliver partial code. Do not use placeholder comments. Do not skip any audit round.
-1Architecture Decision Record (ADR)2Full source code - every file, complete, no placeholders, no TODOs3All 10 audit round reports - written findings and fix confirmations4GitHub Actions workflow files - complete and functional5README.md - setup, new language guide, build guide, audit interpretation6MIGRATION.md - migration guide from previous PolyLang version7CHANGELOG.md - complete version history8COMPATIBILITY.md - backward compatibility guarantees9THREAT_MODEL.md - complete threat model10Final clean bill of health - confirming all 10 audit rounds passed and all 10/10 targets met11PolyLang_Master_Reference.docx - complete living reference document
-
-Section 45 - Final Instruction
-Before writing a single line of code, read the entire Master Reference Document (Part 2 of this combined document). Then write the ADR. Then write the code. Then run all 10 audits. Deliver everything in full.
-
-If any section of this prompt conflicts with the Reference, the Reference wins on implementation details. This prompt wins on architecture, security, and quality standards.
-Do not ask for clarification unless something is genuinely contradictory. If something is merely difficult, proceed.
-
-
-
-PART 2
-THE FULL REBUILD REFERENCE
-Every File • Every Fix • Every Pitfall That Caused a Real CI Failure
-
-
-
-Reference Overview
-44Source files17Languages33Vulnerabilities fixed (v6.5-v6.7)v6.8Current buildABI v6Adapter vtable version - LOCKED, append-onlyPolyLang is a Godot 4.6 GDExtension that turns any external programming language into a first-class Script resource. Every language adapter exposes ONE C symbol: extern "C" PL_EXPORT void pl_get_vtable(PLAdapterVTable* out). That function fills a struct of function pointers. PolyLang loads the struct via dlopen, validates it, and uses it for everything.
-Three-Layer Architecture
-Layer 1 - C++ Corepolylang_language, polylang_script, polylang_script_instanceLayer 2 - Adapters (.so/.dll)adapters/<lang>/polylang_<lang>_adapter.*Layer 3 - Foreign InstancesManaged inside each adapterWARNING: ALL C++ compilation happens in GitHub Actions CI. The dev environment is an Android tablet (Honor X6b) + Termux. There is no local C++ compiler. Every fix is committed via git push and CI runs automatically.
-
-
-Reference 1 - Directory Structure
-WARNING: src/ must be completely flat - no src/src/ nesting. A double-nesting breaks every CMake target and include path.
-polylang/
-  include/
-    pl_adapter_vtable.h        ← THE ABI. Write this first. Never break it.
-  src/                         ← 44 C++ files. Flat directory, no subdirs.
-    compile_cache.cpp/.hpp
-    hot_reload_scheduler.cpp/.hpp
-    mod_loader.cpp/.hpp
-    pl_async_runtime.cpp/.hpp
-    pl_bridge.cpp/.hpp
-    pl_coroutine_scheduler.cpp/.hpp
-    pl_cross_inherit.cpp/.hpp
-    pl_engine_api_bridge.cpp/.hpp
-    pl_export_parser.cpp/.hpp
-    pl_language_util.hpp        ← header only
-    pl_polyglot_parser.cpp/.hpp
-    pl_polyglot_script.cpp/.hpp
-    pl_profiler.cpp/.hpp
-    pl_resource_bridge.cpp/.hpp
-    pl_sandbox_tiers.hpp        ← header only
-    pl_signal_bus.cpp/.hpp
-    pl_state_transfer.cpp/.hpp
-    polylang_language.cpp/.hpp
-    polylang_script.cpp/.hpp
-    polylang_script_instance.cpp/.hpp
-    register_types.cpp/.hpp
-    runtime_manager.cpp/.hpp
-    variant_bridge.cpp/.hpp
-  adapters/
-    lua/polylang_lua_adapter.cpp
-    python/polylang_python_adapter.cpp
-    javascript/polylang_js_adapter.cpp
-    typescript/polylang_ts_adapter.cpp
-    rust/src/lib.rs + Cargo.toml
-    zig/src/main.zig + build.zig
-    go/polylang_go_adapter.go + polylang_go_shim.c + go.mod
-    swift/polylang_swift_adapter.swift + polylang_swift_shim.c
-    kotlin/polylang_kotlin_adapter.cpp + PolyLangScript.kt
-    csharp/PolyLangCSharpAdapter.cs + polylang_cs_shim.c
-    nim/polylang_nim_adapter.nim
-    haxe/polylang_haxe_adapter.cpp
-    squirrel/polylang_squirrel_adapter.cpp
-    wren/polylang_wren_adapter.cpp
-    angelscript/polylang_angelscript_adapter.cpp
-    julia/polylang_julia_adapter.cpp
-    odin/polylang_odin_adapter.cpp + polylang_odin_shim.c + polylang_odin_shim.odin
-  tests/
-    polylang_v65_test.cpp  ← 66 standalone tests, no Godot needed
-    sandbox_escape_test.cpp
-    sidecar_config_test.cpp
-  addons/polylang/
-    plugin.cfg + plugin.gd + polyglot_editor.gd + mod_panel.gd + profiler_panel.gd
-  CMakeLists.txt
-  .github/workflows/build.yml
-
-
-Reference 2 - pl_adapter_vtable.h (ABI v6)
-WARNING: ABI RULE: Field order in PLAdapterVTable is PERMANENT. Never reorder. Never remove. Only append new fields at the end. Changing the order silently breaks every existing adapter binary.
-Key Definitions
-#define PL_ABI_VERSION  6
-#define PL_OK 0  |  PL_ERR_GENERIC -1  |  PL_ERR_METHOD_NOT_FOUND -2
-#define PL_ERR_NOT_IMPLEMENTED -6  |  PL_ERR_MEMORY -7  |  PL_ERR_SANDBOX -8
-
-// Capability flags (bitmask)
-#define PL_CAP_DESKTOP  (1u<<2)  |  PL_CAP_THREAD_SAFE (1u<<4)
-#define PL_CAP_SANDBOX  (1u<<7)  |  PL_CAP_COROUTINE   (1u<<8)
-#define PL_CAP_ASYNC    (1u<<9)  |  PL_CAP_EXPORT_VARS (1u<<12)
-
-// PLValue - EXACTLY 32 bytes (static_assert enforced)
-typedef struct PLValue {
-    int32_t type;   int32_t _pad;
-    union {
-        bool b;  int64_t i;  double f;  char* s; // malloc'd
-        float v2[2];  float v3[3];  float q4[4];  void* obj_ptr;
-        struct { PLValue* data; int32_t len; int32_t _cap; } array;
-        struct { PLValue* keys; PLValue* values; int32_t len; int32_t _cap; } dict;
-        uint8_t _raw[24];  // Zig uses this: vp.*._raw
-    };
-} PLValue;
-Required VTable Slots (adapter rejected at load if any are null)
-pl_compileREQUIRED - returns opaque compiled handle or nullptrpl_free_compiledREQUIREDpl_instantiate_classREQUIRED - returns opaque instance or nullptrpl_free_instanceREQUIREDpl_call_methodREQUIRED - returns PL_OK or negative error codepl_free_value_contentsREQUIRED - frees heap inside PLValue (STRING, ARRAY, DICT)NOTE: Memory rule: STRING values MUST use malloc()/free(), NOT new/delete, NOT Godot allocators. The host calls free() directly.
-
-
-Reference 3 - variant_bridge - Critical Safety Rules
-Two Safety Features You Must Implement
-• Depth cap: all three functions take int depth parameter (default 0). Reject and return NIL when depth > 64.
-• safe_len(): clamps array.len and dict.len from untrusted adapters to [0, 65536] before any loop or allocation. A malicious adapter returning array.len = 2^31-1 would cause OOB reads without this.
-// safe_len: ALWAYS use this for len values from untrusted adapters
-static constexpr int32_t PL_VALUE_MAX_ARRAY_LEN = 65536;
-static inline int32_t safe_len(int32_t raw, const char* context) {
-    if (raw < 0) { ERR_PRINT(..); return 0; }
-    if (raw > PL_VALUE_MAX_ARRAY_LEN) { ERR_PRINT(..); return PL_VALUE_MAX_ARRAY_LEN; }
-    return raw;
-}
-
-void VariantBridge::to_pl_value(const godot::Variant& in, PLValue& out, int depth) {
-    if (depth > PL_MAX_CONVERSION_DEPTH) { ERR_PRINT(..); out = PLValue{}; return; }
-    // ... STRING: out.s = static_cast<char*>(malloc(cs.length() + 1));
-}
-
-
-Reference 4 - RuntimeManager - Correct Method Names
-WARNING: Wrong method names caused real CI failures. Use these exact names.
-get_vtable(LanguageID id)EXISTS - Returns const PLAdapterVTable*require_vtable()DOES NOT EXIST - caused past CI failureunload_all()EXISTS - Called from _finish()shutdown_all()DOES NOT EXIST - caused past CI failuremaybe_register_sidecar(path)EXISTS - Call before is_sandboxed()is_sandboxed(path)EXISTS - Returns boolsandboxed_caps(path)EXISTS - Returns uint32_t bitmasknotify_instance_createdDOES NOT EXIST - caused past CI failureload_adapter() - FIX H-6: validate ALL required slots
-fn(&adapters_[idx].vtable);
-if (adapters_[idx].vtable.abi_version != PL_ABI_VERSION) { /* reject */ }
-// FIX H-6: validate ALL required slots - adapter rejected if any null
-const void* req[] = {
-    (void*)vtable.pl_compile, (void*)vtable.pl_free_compiled,
-    (void*)vtable.pl_instantiate_class, (void*)vtable.pl_free_instance,
-    (void*)vtable.pl_free_value_contents, (void*)vtable.pl_call_method,
-};
-for (auto& p : req) { if (!p) { /* reject */ } }
-
-
-Reference 5 - register_types.cpp - Singleton Creation Order
-WARNING: inject_all_adapter_services() MUST be called last - all singletons must be alive before this.
-void initialize_polylang(ModuleInitializationLevel p_level) {
-    // 1. Register all Godot classes first (ClassDB::register_class<...>)
-    // 2. Create singletons that DON'T go in Engine singleton map:
-    //    RuntimeManager::create(); CompileCache::create();
-    //    HotReloadScheduler::create(); PLScriptRegistry::create();
-    // 3. memnew() the Godot Object singletons + register_singleton()
-    // 4. Register script language
-    language_singleton = memnew(PolyLangLanguage);
-    Engine::get_singleton()->register_script_language(language_singleton);
-    // 5. LAST: inject services into adapters
-    inject_all_adapter_services();
-}
-FIX C-7 + VLN-14 - Signal Disconnect
-• FIX C-7: signal_connect and signal_disconnect shims were nullptr - must be implemented and injected.
-• FIX VLN-14: c_signal_disconnect() must match on BOTH signal_name AND userdata - matching on userdata alone caused the wrong listener to be removed.
-Teardown Order - uninitialize_polylang()
-// 1. Stop background threads FIRST (async_runtime_singleton->stop())
-// 2. FIX C-4: Disconnect all coroutine signal listeners BEFORE memdelete
-//    (coro_scheduler_singleton->shutdown())
-// 3. Unregister script language
-// 4. Unregister Engine singletons (reverse creation order)
-// 5. FIX C-9: PLCrossInherit::destroy() - was never deleted in v6.4
-// 6. Clear native listener cookies
-// 7. Destroy heap singletons (reverse creation order)
-//    PLScriptRegistry, HotReloadScheduler, CompileCache, RuntimeManager
-
-
-Reference 6 - polylang_script_instance.cpp - Critical Patterns
-FIX VLN-13 - hot_swap() Deadlock - 3-Phase Pattern
-WARNING: BEFORE: unique_lock held during StateTransfer::save() which calls foreign vtable code. Foreign code re-entered PolyLang → DEADLOCK.
-void PolyLangScriptInstance::hot_swap(void* new_foreign) {
-    // Phase 1: snapshot under SHARED lock (brief)
-    void* old = nullptr; const PLAdapterVTable* vt = nullptr;
-    { std::shared_lock lk(instance_lock_);
-      old = foreign_instance_.load(std::memory_order_acquire); vt = vtable_; }
-    // Lock RELEASED - foreign code can re-enter safely
-    // Phase 2: save state OUTSIDE any lock
-    StateSnapshot snap;
-    if (old && vt && script_) snap = StateTransfer::save(old, vt, script_);
-    // Phase 3: swap under UNIQUE lock (brief)
-    { std::unique_lock lk(instance_lock_);
-      foreign_instance_.store(new_foreign, std::memory_order_release);
-      if (old && vt && vt->pl_free_instance) vt->pl_free_instance(old); }
-    // Phase 4: restore state OUTSIDE any lock
-}
-NOTE: foreign_instance_ must be std::atomic<void*>. All access goes through atomic load/store/exchange.
-
-
-Reference 7 - Bridge Systems - Key Fixes
-VLN-01/02/12 - pl_signal_bus
-VLN-01emission_queue_ unbounded → OOM DoS. Fix: PL_SIGNAL_QUEUE_HARD_CAP = 4096VLN-02Duplicate Callable allowed (double-fire). Fix: dedup check in connect_signal() before push_backVLN-12dropped_emissions_ not observable. Fix: get_dropped_emissions() exposed via ClassDBVLN-03 - pl_bridge - Recursion Depth Guard
-static constexpr int PL_BRIDGE_MAX_CALL_DEPTH = 64;
-static thread_local int tl_call_depth = 0;
-struct CallDepthGuard { CallDepthGuard() { ++tl_call_depth; } ~CallDepthGuard() { --tl_call_depth; } };
-// VLN-03: Cross-language A->B->A cycle = stack overflow. Reject if depth >= 64.
-VLN-15 - HotReloadScheduler - WorkerThreadPool
-• WorkerThreadPool::add_native_task() requires a plain C function pointer. Capturing lambdas are rejected by the API.
-• CORRECT: use heap-allocated task struct + static function pointer.
-• VLN-15: is_busy() must hold pending_mutex_ when reading stage_queue_ - unprotected read was a data race.
-VLN-08 - pl_resource_bridge - Timeout
-• VLN-08: Workers blocked indefinitely if main thread never calls flush(). Fix: wait_for() with 2s timeout.
-• FIX C-5: is_main_thread() - std::thread::id has NO operator bool. Compare IDs directly: get_id() == stored_id_.
-
-
-Reference 8 - polylang_language.cpp - _frame() Order
-void PolyLangLanguage::_frame() {
-    HotReloadScheduler::get_singleton()->flush_frame(0.002);    // 1. hot reload (2ms budget)
-    if (auto* bus = PLSignalBus::get_singleton()) bus->flush_queued();  // 2. signal bus
-    if (auto* coro = PLCoroutineScheduler::get_singleton()) coro->tick(1.0/60.0); // 3. coroutines
-    if (auto* ar = PLAsyncRuntime::get_singleton()) ar->tick_main_thread(); // 4. async (FIX C-1)
-    if (auto* prof = PLProfiler::get_singleton()) prof->flush_to_godot();   // 5. profiler
-    if (auto* rb = PLResourceBridge::get_singleton()) rb->flush();          // 6. resource bridge
-    if (auto* eab = PLEngineAPIBridge::get_singleton()) eab->flush();       // 7. engine API
-}
-FIX B-4 - _get_recognized_extensions()
-• WRONG: returned "pl.lua" - Godot ResourceLoader doesn't understand double-extensions.
-• CORRECT: return plain extension "lua". language_from_path() still enforces double-extension on the full path.
-
-
-Reference 9 - Language Adapter Skeleton
-Every adapter is a single shared library exporting pl_get_vtable(). Use this as the minimal complete skeleton:
-#include "../../include/pl_adapter_vtable.h"
-#include <cstdlib>  // malloc / free
-#include <cstring>
-
-struct CompiledScript { char* source; size_t source_len; };
-struct ScriptInstance  { CompiledScript* compiled; };
-
-static void* pl_compile_impl(const char* src, const char* path) {
-    auto* cs = (CompiledScript*)malloc(sizeof(CompiledScript));
-    cs->source_len = strlen(src);
-    cs->source = (char*)malloc(cs->source_len + 1);
-    memcpy(cs->source, src, cs->source_len + 1);
-    return cs;
-}
-static void pl_free_compiled_impl(void* h) { auto* cs=(CompiledScript*)h; free(cs->source); free(cs); }
-static void* pl_instantiate_class_impl(void* compiled, const char*) {
-    auto* inst = (ScriptInstance*)malloc(sizeof(ScriptInstance));
-    inst->compiled = (CompiledScript*)compiled; return inst;
-}
-static void pl_free_instance_impl(void* inst) { free(inst); }
-static int pl_call_method_impl(void* inst, const char* name, PLValue* args, int32_t argc, PLValue* ret) {
-    pl_value_init(ret);
-    if (strcmp(name, "_ready") == 0) { return PL_OK; }
-    return PL_ERR_METHOD_NOT_FOUND;
-}
-static void pl_free_value_contents_impl(PLValue* v) {
-    if (!v) return;
-    switch (v->type) {
-        case PL_TYPE_STRING: free(v->s); v->s = nullptr; break;
-        case PL_TYPE_ARRAY: /* recurse then free(v->array.data) */ break;
-        case PL_TYPE_DICT:  /* recurse then free(v->dict.keys/values) */ break;
-    }
-    v->type = PL_TYPE_NIL;
-}
-extern "C" PL_EXPORT void pl_get_vtable(PLAdapterVTable* out) {
-    memset(out, 0, sizeof(*out));
-    out->abi_version          = PL_ABI_VERSION;
-    out->capabilities         = PL_CAP_DESKTOP | PL_CAP_ANDROID | PL_CAP_SANDBOX;
-    out->pl_compile           = pl_compile_impl;
-    out->pl_free_compiled     = pl_free_compiled_impl;
-    out->pl_instantiate_class = pl_instantiate_class_impl;
-    out->pl_free_instance     = pl_free_instance_impl;
-    out->pl_call_method       = pl_call_method_impl;
-    out->pl_free_value_contents = pl_free_value_contents_impl;
-}
-Languages That Need a C Shim
-GoC.PLValue._type WRONG - vtype is a Go keyword. Fix: polylang_go_shim.c implements pl_get_vtable() in C, calls go_* exportsSwift@_silgen_name exports can't fill C function-pointer struct. Fix: polylang_swift_shim.c with extern prototypesC#NativeAOT UnmanagedCallersOnly uses IntPtr. Fix: polylang_cs_shim.c with typed trampolines casting IntPtr <-> const char*ZigAnonymous union .anon doesn't exist. Fix: use ._raw not .anon in Zig source. No shim needed.
-
-Reference 10 - Polyglot Scripts (.poly files)
-File Format
-# base_class: Node3D
-# author: Ntsako
-[lua]
-function _ready() print('Lua block') end
-function my_lua_method(x) return x * 2 end
-[/lua]
-[python]
-def _process(delta): pass
-[/python]
-# Valid tags: lua, python, javascript, typescript, rust, zig, go,
-# swift, kotlin, nim, odin, haxe, csharp, squirrel, wren, angelscript, julia
-Dispatch Rules
-• Fan-out: _ready, _process, _physics_process, _enter_tree, _exit_tree, _input, _unhandled_input → dispatch to ALL blocks.
-• First-win: all other method calls → first block that has pl_has_method() returning true.
-• Notification: always fans out to all blocks.
-• Parser limit: max 256 blocks, 1 MiB source limit.
-
-
-Reference 11 - CI/CD Key Decisions
-WARNING: Every row in this table caused a real CI failure. Do not repeat these mistakes.
-DecisionCORRECT ApproachWhy (failure if wrong)godot-cpp refUse master branch (v10 API, supports Godot 4.3+)'godot-4.6-stable' branch does not existgodot-cpp clonegit clone --depth 1 (no submodules)No .gitmodules in repo - manual clone in CI stepsAndroid runnerubuntu-22.04$ANDROID_NDK_ROOT pre-installed. android-actions/setup-android rejected (JDK mismatch)Android API levelAPI 28 minimumstd::shared_mutex requires Bionic API 28+. Lower targets fail to linkWorkerThreadPoolHeap struct + static void(*)(void*)add_native_task() requires plain C function pointer. Capturing lambdas rejectedZig Android flag-Dandroid_api=28Must declare option(android_api, u32, 21) in build.zig before using -D flagsiOS CICODE_SIGNING_ALLOWED=NOCI has no code signing certsRust Android RIDandroid.arm64 (dot)android-arm64 (hyphen) causes 'cargo target not found' errorVersion Pins
-env:
-  GODOT_CPP_REF: "master"  # NOT godot-4.6-stable (doesn't exist)
-  ANDROID_API:   "28"
-  ANDROID_ABI:   "arm64-v8a"
-  NDK_VERSION:   "26.3.11579264"
-
-
-Reference 12 - All Constants
-PL_ABI_VERSION6  - pl_adapter_vtable.hsizeof(PLValue)32 bytes - static_assert enforcedAndroid minimum API28 - CMakeLists.txt, build.ymlPL_SIGNAL_QUEUE_HARD_CAP4096 - pl_signal_bus.cpp (VLN-01)PL_BRIDGE_MAX_CALL_DEPTH64 - pl_bridge.cpp (VLN-03)PL_POLY_MAX_BLOCKS256 - pl_polyglot_parser.cpp (VLN-07)PL_RESOURCE_DEFERRED_TIMEOUT2000ms - pl_resource_bridge.cpp (VLN-08)PL_VALUE_MAX_ARRAY_LEN65536 - variant_bridge.cpp (VLN-09)PL_PROFILER_MAX_LABELS1024 - pl_profiler.cpp (VLN-10)PL_EXPORT_MAX_VARS512 - pl_export_parser.cpp (VLN-11)PL_MAX_CONVERSION_DEPTH64 - variant_bridge.hpp (FIX H-5)Source file size limit1 MiB - mod_loader.cpp, pl_polyglot_parser.cpp
-
-Reference 13 - Complete Vulnerability Catalogue
-Round 1 - v6.5 (18 fixes)
-IDSevFile / BugFixC-1CRITpl_async_runtime.cpp: heap TOCTOU + memory leakLock-protected main_thread_callbacks_ queue; drain via tick_main_thread()C-2CRITpl_coroutine_scheduler: deadlock - on_done called under active_mutex_Collect finished entries under lock, release, THEN fire callbacksC-3CRITpl_coroutine_scheduler: UB - mc.id read after std::move(mc)uint64_t id = mc.id; BEFORE the moveC-4CRITpl_coroutine_scheduler: raw 'this' captured in signal lambdashutdown() disconnects all listeners before scheduler destroyedC-5CRITpl_resource_bridge: operator bool on thread::id (does not exist)Store main_thread_id_ at construction, compare with get_id()C-6CRITpl_engine_api_bridge: flush() hardcoded SandboxTier::TrustedDeferredCall stores tier; flush() passes dc.tierC-7CRITregister_types: signal_connect/disconnect never set (nullptr)c_signal_connect + c_signal_disconnect shims implemented and injectedC-8CRITregister_types: svc.call_super never set (nullptr)svc.call_super = PLCrossInherit::pl_call_super_implC-9CRITregister_types: PLCrossInherit singleton never deletedPLCrossInherit::destroy() called in uninitialize_polylang()C-10CRITpl_polyglot_script: PLValue heap leak when pl_free_value_contents nullFallback to VariantBridge::free_pl_value(*ret) in call_all_blocksH-1HIGHmod_loader: path traversal via cfg.entry = '../../evil.lua'sanitize_entry_path() rejects .., leading /, absolute pathsH-2HIGHmod_loader: fread return value uncheckedCheck bytes_read == (size_t)sz; fail on mismatchH-3HIGHpl_cross_inherit: TOCTOU - lock acquired per chain stepresolve_chain_locked() holds single lock for entire walkH-5HIGHvariant_bridge: unbounded recursion on nested PLValueDepth cap 64 on to_pl_value, from_pl_value, free_pl_valueH-6HIGHruntime_manager: only abi_version checked after vtable loadvalidate_required_vtable_slots() - adapter rejected if any nullM-1MEDpl_resource_bridge: cache grows unboundedEvict stale entries on lookupM-2MEDpl_polyglot_parser: no file size limit1 MiB hard limit before any processingRound 2 - v6.6 (12 fixes)
-VLN-01 CRITemission_queue_ unbounded (OOM DoS) → PL_SIGNAL_QUEUE_HARD_CAP=4096VLN-02 HIGHDuplicate Callable allowed (double-fire) → dedup check in connect_signal()VLN-03 CRITNo recursion guard in pl_bridge (A->B->A stack overflow) → thread_local CallDepthGuard, max 64VLN-04 HIGHABBA deadlock (coroutine adopt vs resume) → separate scope for pending adoptionVLN-05 HIGHFirst signal dropped (coroutine) → insert into active_ map BEFORE registering signal listenerVLN-06 CRITmod_loader: ftell() returns -1 unchecked → huge malloc. → explicit sz < 0 checkVLN-07 HIGHpl_polyglot_parser: block count unbounded → PL_POLY_MAX_BLOCKS=256VLN-08 HIGHpl_resource_bridge: worker waits indefinitely → wait_for() with 2s timeoutVLN-09 CRITvariant_bridge: array.len/dict.len from adapter unchecked → safe_len() clamps to [0, 65536]VLN-10 MEDpl_profiler: stats_ map unbounded (label spam DoS) → PL_PROFILER_MAX_LABELS=1024VLN-11 MEDpl_export_parser: no export variable count limit → PL_EXPORT_MAX_VARS=512VLN-12 MEDdropped_emissions_ not observable → get_dropped_emissions() via ClassDBRound 3 - v6.7 (3 fixes)
-VLN-13 CRIThot_swap() deadlock → 3-phase split: snapshot under shared_lock; save OUTSIDE lock; swap under unique_lock; restore OUTSIDE lockVLN-14 HIGHc_signal_disconnect() matched on userdata only → match on BOTH signal_name AND userdataVLN-15 HIGHis_busy() reads stage_queue_ without lock → acquires pending_mutex_ before reading
-
-Reference 14 - Every Pitfall That Caused a Real Failure
-Godot API Pitfalls
-WRONG: method.utf8().get_data()CORRECT: godot::String(method).utf8().get_data()  - StringName has NO .utf8()WRONG: Object::get(StringName, bool*)CORRECT: Object::get(StringName)  - bool* overload dropped in masterWRONG: auto params in GDExtension lambdasCORRECT: Explicit GDExtensionScriptInstanceDataPtr etc. (MSVC C++20 rejects auto)WRONG: Capturing lambda in WorkerThreadPoolCORRECT: Plain C function pointer (void(*)(void*)) + heap task structWRONG: #include <godot_cpp/core/gdextension_interface.h>CORRECT: Remove this include - path does not exist in masterWRONG: _get_instance_base_type() returns godot::StringCORRECT: Returns godot::StringName in godot-cpp masterMemory Pitfalls
-• STRING PLValues MUST use malloc/free. Never new/delete. Never Godot allocator. The host calls free() directly.
-• Set _cap = len when allocating array.data or dict.keys/values - always.
-• After call_all_blocks, always free the previous ret heap before overwriting (FIX C-10).
-• prop_name_storage_ must be fully populated BEFORE storing .c_str() into prop_info_cache_. Vector realloc invalidates all existing c_str() pointers.
-Threading Pitfalls
-• ResourceLoader::load() is main-thread ONLY. Always defer from worker threads.
-• std::thread::id has no operator bool. Compare IDs directly: get_id() == stored_id_.
-• hot_swap() must call StateTransfer::save() OUTSIDE any lock - foreign vtable code can re-enter PolyLang.
-• c_signal_disconnect() must match on BOTH signal_name AND userdata - not just userdata.
-ABI Pitfalls
-• Never reorder vtable fields. Append-only.
-• memset(&vtable, 0, sizeof(vtable)) before calling pl_get_vtable - never assume zero init.
-• All 6 required slots must be non-null. RuntimeManager rejects the adapter at load if any are null.
-
-
-Reference 15 - Rebuild Checklist
-Follow this order. Do not skip steps.
-16. Write include/pl_adapter_vtable.h - lock the ABI first
-17. Write runtime_manager - adapter loading + sandbox registry
-18. Write compile_cache - keyed cache with sandboxed_key support
-19. Write variant_bridge - safe_len(), depth cap, malloc-only strings
-20. Write polylang_script + polylang_script_instance
-21. Write polylang_language - drives _frame() systems
-22. Write all bridge systems (signal bus, bridge, coroutine, async, resource, engine API)
-23. Write register_types - wire all singletons, inject services, signal shims
-24. Write mod_loader, polyglot parser/script, profiler, export parser, state transfer
-25. Write CMakeLists.txt
-26. Implement Lua adapter end-to-end, test in Godot
-27. Add remaining 16 adapters using Lua as template
-28. Write .github/workflows/build.yml - Android + Linux + Windows
-29. Run standalone tests: g++ -std=c++20 -Iinclude -Isrc -o pl_test tests/polylang_v65_test.cpp && ./pl_test
-30. Push, watch CI, fix any errors
-31. Write addons/polylang/ editor plugin
-
-
-
-END OF COMBINED DOCUMENT
-PolyLang GDExtension  •  v6.8  •  Godot 4.6 / C++20  •  17 Adapters
-github.com/ntsakombungela2011-a11y/polylang-rebuild

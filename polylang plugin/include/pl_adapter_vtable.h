@@ -21,9 +21,6 @@ extern "C" {
 
 #define PL_ABI_VERSION  6
 
-// ── Forward declarations ─────────────────────────────────────
-struct PLRuntimeServices;
-
 // ── Return codes ─────────────────────────────────────────────
 #define PL_OK                    0
 #define PL_ERR_GENERIC          -1
