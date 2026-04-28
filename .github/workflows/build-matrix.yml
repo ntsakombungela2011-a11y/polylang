@@ -53,7 +53,7 @@ jobs:
           submodules: false
 
       # ── Linux / Android Setup ────────────────────────────────────────────
-      - name: [Linux/Android] Detect godot-cpp branch
+      - name: "[Linux/Android] Detect godot-cpp branch"
         if: matrix.platform != 'windows'
         id: gcpp_linux
         run: |
@@ -61,7 +61,7 @@ jobs:
               | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
           echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
 
-      - name: [Linux/Android] Cache godot-cpp
+      - name: "[Linux/Android] Cache godot-cpp"
         if: matrix.platform != 'windows'
         id: cache_gcpp_linux
         uses: actions/cache@v4
@@ -69,7 +69,7 @@ jobs:
           path: "${{ env.PLUGIN_DIR }}/godot-cpp"
           key: godot-cpp-${{ matrix.platform }}-${{ steps.gcpp_linux.outputs.branch }}-v1
 
-      - name: [Linux/Android] Fetch godot-cpp
+      - name: "[Linux/Android] Fetch godot-cpp"
         if: matrix.platform != 'windows' && steps.cache_gcpp_linux.outputs.cache-hit != 'true'
         run: |
           B="${{ steps.gcpp_linux.outputs.branch }}"
@@ -78,7 +78,7 @@ jobs:
             | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
 
       # ── Windows Setup ────────────────────────────────────────────────────
-      - name: [Windows] Cache godot-cpp
+      - name: "[Windows] Cache godot-cpp"
         if: matrix.platform == 'windows'
         id: cache_gcpp_win
         uses: actions/cache@v4
@@ -86,7 +86,7 @@ jobs:
           path: "${{ github.workspace }}\\${{ env.PLUGIN_DIR }}\\godot-cpp"
           key: godot-cpp-windows-detected-v5
 
-      - name: [Windows] Fetch godot-cpp
+      - name: "[Windows] Fetch godot-cpp"
         if: matrix.platform == 'windows' && steps.cache_gcpp_win.outputs.cache-hit != 'true'
         run: |
           $dest = Join-Path "${{ github.workspace }}" "$env:PLUGIN_DIR\godot-cpp"
@@ -101,7 +101,7 @@ jobs:
           Remove-Item _gcpp_tmp, godot-cpp.zip -Recurse -Force
 
       # ── System Dependencies ─────────────────────────────────────────────
-      - name: [Android] Setup NDK
+      - name: "[Android] Setup NDK"
         if: matrix.platform == 'android'
         id: ndk
         uses: nttld/setup-ndk@v1
@@ -109,7 +109,7 @@ jobs:
           ndk-version: "r27d"
           add-to-path: true
 
-      - name: [Linux/Android] Install build tools
+      - name: "[Linux/Android] Install build tools"
         if: matrix.platform != 'windows'
         run: |
           sudo apt-get update -qq
@@ -129,7 +129,7 @@ jobs:
           path: ${{ matrix.vendor_path }}
           key: vendor-${{ matrix.platform }}-${{ hashFiles('vendor/CMakeLists.txt') }}-v6
 
-      - name: [Linux/Android] Build vendored deps
+      - name: "[Linux/Android] Build vendored deps"
         if: matrix.platform != 'windows' && steps.cache_vendor.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
@@ -142,7 +142,7 @@ jobs:
           cmake --build vendor/build-${{ matrix.platform }} --parallel
           cmake --install vendor/build-${{ matrix.platform }}
 
-      - name: [Windows] Build vendored deps
+      - name: "[Windows] Build vendored deps"
         if: matrix.platform == 'windows'
         run: |
           New-Item -ItemType Directory -Force -Path "vendor/msvc_shim/sys" | Out-Null
@@ -372,12 +372,12 @@ jobs:
           find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "polylang.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
           find "${{ env.PLUGIN_DIR }}/${{ matrix.build_dir }}" -name "*adapter*.$EXT" -exec cp {} pkg/addons/polylang/bin/${{ matrix.platform }}/ \;
           cp -r "${{ env.PLUGIN_DIR }}/addons/polylang/"* pkg/addons/polylang/
-          zip -r ${{ matrix.artifact }}.zip pkg/
+          zip -r ${{ matrix.artifact_name }}.zip pkg/
         shell: bash
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
           retention-days: 30
