@@ -450,6 +450,28 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y cmake ninja-build build-essential git
 
+      - name: Detect godot-cpp branch
+        id: gcpp_test
+        run: |
+          B=$(git ls-remote --symref https://github.com/godotengine/godot-cpp HEAD \
+              | awk '/^ref:/{print $2}' | sed 's|refs/heads/||') || B="4.3"
+          echo "branch=${B:-4.3}" >> $GITHUB_OUTPUT
+
+      - name: Cache godot-cpp
+        id: cache_gcpp_test
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.PLUGIN_DIR }}/godot-cpp"
+          key: godot-cpp-linux-${{ steps.gcpp_test.outputs.branch }}-v1
+
+      - name: Fetch godot-cpp
+        if: steps.cache_gcpp_test.outputs.cache-hit != 'true'
+        run: |
+          B="${{ steps.gcpp_test.outputs.branch }}"
+          mkdir -p "$PLUGIN_DIR/godot-cpp"
+          curl -sL "https://github.com/godotengine/godot-cpp/archive/refs/heads/${B}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$PLUGIN_DIR/godot-cpp"
+
       - name: Build and Run Test
         run: |
           cmake -S "${{ env.PLUGIN_DIR }}" -B build_tests -G Ninja \
