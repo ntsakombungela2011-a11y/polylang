@@ -369,16 +369,37 @@ if(AS_LIB AND AS_INC AND NOT ANDROID)
     else()
         message(WARNING "AngelScript library variable set but file not found: ${AS_LIB} — skipping AngelScript adapter")
     endif()
-    # Add-on headers: scriptstdstring and scriptarray live in named subdirs
-    if(DEFINED AS_ADDONS_LIB)
-        find_library(AS_STDSTRING_LIB NAMES as_scriptstdstring PATHS ${AS_ADDONS_LIB} NO_DEFAULT_PATH)
-        find_library(AS_ARRAY_LIB    NAMES as_scriptarray     PATHS ${AS_ADDONS_LIB} NO_DEFAULT_PATH)
-        if(AS_STDSTRING_LIB)
-            target_link_libraries(polylang_adapter_as PRIVATE ${AS_STDSTRING_LIB})
+    # Add-on libraries: scriptstdstring and scriptarray provide RegisterStdString / RegisterScriptArray
+    # First try to find pre-built add-on libs (produced by the vendor build)
+    find_library_with_vendor_fallback(AS_STDSTRING_LIB as_scriptstdstring)
+    find_library_with_vendor_fallback(AS_ARRAY_LIB    as_scriptarray)
+    if(AS_STDSTRING_LIB AND AS_ARRAY_LIB)
+        target_link_libraries(polylang_adapter_as PRIVATE ${AS_STDSTRING_LIB} ${AS_ARRAY_LIB})
+        message(STATUS "AngelScript add-ons: linked pre-built libs")
+    else()
+        # Fallback: compile add-on sources directly into the adapter
+        set(_AS_ADDON_DIR "${CMAKE_SOURCE_DIR}/../vendor/angelscript/add_on")
+        if(EXISTS "${_AS_ADDON_DIR}/scriptstdstring/scriptstdstring.cpp" AND
+           EXISTS "${_AS_ADDON_DIR}/scriptarray/scriptarray.cpp")
+            target_sources(polylang_adapter_as PRIVATE
+                "${_AS_ADDON_DIR}/scriptstdstring/scriptstdstring.cpp"
+                "${_AS_ADDON_DIR}/scriptarray/scriptarray.cpp"
+            )
+            target_include_directories(polylang_adapter_as PRIVATE
+                "${_AS_ADDON_DIR}/scriptstdstring"
+                "${_AS_ADDON_DIR}/scriptarray"
+            )
+            message(STATUS "AngelScript add-ons: compiled from source (${_AS_ADDON_DIR})")
+        else()
+            message(WARNING "AngelScript add-on sources not found at ${_AS_ADDON_DIR} — RegisterStdString/RegisterScriptArray will be missing")
         endif()
-        if(AS_ARRAY_LIB)
-            target_link_libraries(polylang_adapter_as PRIVATE ${AS_ARRAY_LIB})
-        endif()
+    endif()
+    # Add-on headers needed by the adapter itself
+    if(EXISTS "${CMAKE_SOURCE_DIR}/../vendor/angelscript/add_on")
+        target_include_directories(polylang_adapter_as PRIVATE
+            "${CMAKE_SOURCE_DIR}/../vendor/angelscript/add_on/scriptstdstring"
+            "${CMAKE_SOURCE_DIR}/../vendor/angelscript/add_on/scriptarray"
+        )
     endif()
     message(STATUS "AngelScript: ENABLED")
 else()
