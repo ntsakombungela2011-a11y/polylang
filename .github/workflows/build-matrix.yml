@@ -64,6 +64,7 @@ jobs:
   # ── Build Stage ─────────────────────────────────────────────────────
   build:
     name: Build ${{ matrix.name }}
+    needs: [analyze]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -385,6 +386,7 @@ jobs:
           else
             cargo build --release
           fi
+        shell: bash
         continue-on-error: true
 
       # ── CMake Plugin Build ───────────────────────────────────────────────
@@ -466,7 +468,7 @@ jobs:
   # ── Package Stage ───────────────────────────────────────────────────
   package:
     name: Package — Godot addon zip
-    needs: [build]
+    needs: [build, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
